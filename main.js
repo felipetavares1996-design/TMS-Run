@@ -75,6 +75,13 @@ const deliveriesData = [
     { id: '106', name: 'Lucia Lima', address: 'Rua Oscar Freire, 1000', cep: '01426-000', status: 'done' }
 ];
 
+let vehiclesData = [
+    { name: 'Mercedes Sprinter', plate: 'ABC-1234', health: 80, info: 'Próxima Troca de Óleo: 200km', color: '#EF4444' },
+    { name: 'Fiorino Cargo', plate: 'XYZ-9876', health: 10, info: 'Manutenção em dia', color: '#22C55E' }
+];
+
+let customTabsData = [];
+
 function renderDeliveryCard(d) {
     return `
         <div class="delivery-card" style="padding: 25px; border-radius: 20px; margin-bottom: 20px; background: white; border: 1px solid #F0F0F0; box-shadow: var(--shadow-sm); display: flex; justify-content: space-between; align-items: center;">
@@ -97,16 +104,25 @@ function renderDeliveryCard(d) {
 
 function sidebarTemplate() {
     const items = [
-        { id: 'home', label: 'Home', icon: '🏠' },
-        { id: 'control_tower', label: 'Torre de Controle', icon: '📡' },
-        { id: 'deliveries', label: 'Entregas', icon: '📦' },
-        { id: 'collection', label: 'Coleta', icon: '📥' },
-        { id: 'finance', label: 'Financeiro', icon: '💰' },
-        { id: 'fleet', label: 'Frota', icon: '🚛' },
-        { id: 'calendar', label: 'Calendário', icon: '📅' },
-        { id: 'messages', label: 'Mensagens', icon: '💬' },
-        { id: 'profile', label: 'Perfil', icon: '👤' }
+        { id: 'home', label: 'Home', icon: '🏠', roles: ['admin', 'gestao', 'operador'] },
+        { id: 'control_tower', label: 'Torre de Controle', icon: '📡', roles: ['admin', 'gestao'] },
+        { id: 'deliveries', label: 'Entregas', icon: '📦', roles: ['admin', 'gestao', 'operador'] },
+        { id: 'collection', label: 'Coleta', icon: '📥', roles: ['admin', 'gestao', 'operador'] },
+        { id: 'finance', label: 'Financeiro', icon: '💰', roles: ['admin'] },
+        { id: 'fleet', label: 'Frota', icon: '🚛', roles: ['admin', 'gestao'] },
+        { id: 'calendar', label: 'Calendário', icon: '📅', roles: ['admin', 'gestao', 'operador'] },
+        { id: 'messages', label: 'Mensagens', icon: '💬', roles: ['admin', 'gestao', 'operador'] },
+        { id: 'profile', label: 'Perfil', icon: '👤', roles: ['admin', 'gestao', 'operador'] }
     ];
+
+    // Adiciona as abas customizadas
+    customTabsData.forEach((tab, index) => {
+        items.push({ id: 'custom_' + index, label: tab, icon: '📁', roles: ['admin', 'gestao'] });
+    });
+
+    const allowedItems = items.filter(item => item.roles.includes(currentState.userRole));
+
+    const showSettings = currentState.userRole === 'admin';
 
     return `
         <aside class="sidebar">
@@ -114,14 +130,14 @@ function sidebarTemplate() {
                 <img src="assets/logo_run.png" style="width: 100%; max-width: 180px; height: auto; object-fit: contain;" alt="RUN">
             </div>
             <div class="sidebar-menu">
-                ${items.map(item => `
+                ${allowedItems.map(item => `
                     <div class="nav-item-sidebar ${currentState.screen === item.id ? 'active' : ''}" onclick="navigate('${item.id}')">
                         ${item.icon} ${item.label}
                     </div>
                 `).join('')}
             </div>
             <div class="sidebar-footer" style="padding: 20px;">
-                <div class="nav-item-sidebar ${currentState.screen === 'settings' ? 'active' : ''}" onclick="navigate('settings')">⚙️ Configurações</div>
+                ${showSettings ? `<div class="nav-item-sidebar ${currentState.screen === 'settings' ? 'active' : ''}" onclick="navigate('settings')">⚙️ Configurações</div>` : ''}
                 <div class="nav-item-sidebar" onclick="handleLogout()">🚪 Sair</div>
             </div>
         </aside>
@@ -153,10 +169,10 @@ const screens = {
                     <img src="assets/logo_run.png" style="height: 60px; width: auto; object-fit: contain;" alt="RUN">
                 </div>
                 <nav style="display: flex; gap: 40px; font-weight: 600; font-size: 1.05rem; color: #FFB302; /* Amarelo/Laranja */">
-                    <span style="cursor: pointer;">Enviar pacotes</span>
-                    <span style="cursor: pointer;">Rastrear pacotes</span>
-                    <span style="cursor: pointer;">Fazer entregas</span>
-                    <span style="cursor: pointer;">Central de Ajuda</span>
+                    <span style="cursor: pointer;" onclick="showToast('Em breve!')">Enviar pacotes</span>
+                    <span style="cursor: pointer;" onclick="showToast('Em breve!')">Rastrear pacotes</span>
+                    <span style="cursor: pointer;" onclick="showToast('Em breve!')">Fazer entregas</span>
+                    <span style="cursor: pointer;" onclick="showToast('Em breve!')">Central de Ajuda</span>
                 </nav>
                 <button onclick="document.getElementById('login-email').focus(); document.querySelector('.login-form-container').scrollIntoView({behavior:'smooth'})" class="btn-entrar" style="width: auto; padding: 10px 40px; border-radius: 40px;">Entrar</button>
             </header>
@@ -167,8 +183,8 @@ const screens = {
                         <h1 style="font-size: 4rem; font-weight: 800; line-height: 1.1; margin-bottom: 30px; color: #1E293B;">Vem com a RUN!</h1>
                         <p style="font-size: 2rem; color: #475569; margin-bottom: 50px; line-height: 1.4;">Tecnologia que simplifica sua experiência de envios.</p>
                         <div style="display: flex; gap: 20px;">
-                            <button class="btn-entrar" onclick="navigate('login')" style="background: #0084FF; border-radius: 40px; padding: 15px 30px; width: auto;">Quero ser Cliente</button>
-                            <button class="btn-entrar" onclick="navigate('login')" style="background: #0084FF; border-radius: 40px; padding: 15px 30px; width: auto;">Rastrear um pacote</button>
+                            <button class="btn-entrar" onclick="showToast('Em breve!')" style="background: #0084FF; border-radius: 40px; padding: 15px 30px; width: auto;">Quero ser Cliente</button>
+                            <button class="btn-entrar" onclick="showToast('Em breve!')" style="background: #0084FF; border-radius: 40px; padding: 15px 30px; width: auto;">Rastrear um pacote</button>
                         </div>
                     </div>
 
@@ -338,33 +354,24 @@ const screens = {
                 </header>
                 <div style="padding: 40px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
-                        <h2 style="font-size: 1.2rem;">Veículos Ativos (15)</h2>
+                        <h2 style="font-size: 1.2rem;">Veículos Ativos (${vehiclesData.length})</h2>
                         <button class="btn-entrar" style="width: auto; padding: 10px 25px;" onclick="adicionarVeiculo()">+ Novo Veículo</button>
                     </div>
 
                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 25px;">
-                        <div style="background: white; padding: 25px; border-radius: 25px; box-shadow: var(--shadow-sm); display: flex; gap: 20px;">
-                            <div style="font-size: 3rem;">🚛</div>
-                            <div style="flex: 1;">
-                                <h3 style="margin: 0;">Mercedes Sprinter</h3>
-                                <div style="color: #666; font-size: 0.9rem; margin-bottom: 10px;">Placa: ABC-1234</div>
-                                <div style="height: 4px; background: #eee; border-radius: 2px; position: relative;">
-                                    <div style="width: 80%; height: 100%; background: #EF4444; border-radius: 2px;"></div>
+                        ${vehiclesData.map(v => `
+                            <div style="background: white; padding: 25px; border-radius: 25px; box-shadow: var(--shadow-sm); display: flex; gap: 20px;">
+                                <div style="font-size: 3rem;">🚛</div>
+                                <div style="flex: 1;">
+                                    <h3 style="margin: 0;">${v.name}</h3>
+                                    <div style="color: #666; font-size: 0.9rem; margin-bottom: 10px;">Placa: ${v.plate}</div>
+                                    <div style="height: 4px; background: #eee; border-radius: 2px; position: relative;">
+                                        <div style="width: ${v.health}%; height: 100%; background: ${v.color}; border-radius: 2px;"></div>
+                                    </div>
+                                    <small style="display: block; margin-top: 5px; color: ${v.color}; font-weight: 700;">${v.info}</small>
                                 </div>
-                                <small style="display: block; margin-top: 5px; color: #EF4444; font-weight: 700;">Próxima Troca de Óleo: 200km</small>
                             </div>
-                        </div>
-                        <div style="background: white; padding: 25px; border-radius: 25px; box-shadow: var(--shadow-sm); display: flex; gap: 20px;">
-                            <div style="font-size: 3rem;">🚛</div>
-                            <div style="flex: 1;">
-                                <h3 style="margin: 0;">Fiorino Cargo</h3>
-                                <div style="color: #666; font-size: 0.9rem; margin-bottom: 10px;">Placa: XYZ-9876</div>
-                                <div style="height: 4px; background: #eee; border-radius: 2px; position: relative;">
-                                    <div style="width: 10%; height: 100%; background: #22C55E; border-radius: 2px;"></div>
-                                </div>
-                                <small style="display: block; margin-top: 5px; color: #22C55E; font-weight: 700;">Manutenção em dia</small>
-                            </div>
-                        </div>
+                        `).join('')}
                     </div>
                 </div>
             </div>
@@ -632,7 +639,28 @@ function updateDeliveryStatus(id, status) {
 }
 
 function render() {
-    app.innerHTML = screens[currentState.screen]();
+    // If the active screen is a custom tab
+    if (currentState.screen.startsWith('custom_')) {
+        const tabIndex = parseInt(currentState.screen.replace('custom_', ''));
+        const tabName = customTabsData[tabIndex];
+        app.innerHTML = `
+            <div class="app-layout">
+                ${sidebarTemplate()}
+                <div class="main-content">
+                    <header class="content-header">
+                        <h1 style="font-size: 1.5rem; font-weight: 800; color: var(--primary-blue);">${tabName}</h1>
+                    </header>
+                    <div style="padding: 40px; text-align: center;">
+                        <div style="font-size: 4rem; margin-bottom: 20px;">📂</div>
+                        <h2>Aba ${tabName} (Módulo Vazio)</h2>
+                        <p style="color: #666;">O conteúdo para este módulo customizado ainda não foi definido.</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else {
+        app.innerHTML = screens[currentState.screen]();
+    }
 
     if (currentState.screen === 'deliveries') {
         const listContainer = document.getElementById('delivery-list-container');
@@ -669,12 +697,22 @@ function handleLogout() {
 }
 
 function exportarPDF() {
-    showToast('Exportação de PDF em desenvolvimento.');
+    window.print();
+    showToast('Iniciando impressão / exportação de PDF...');
 }
 
 function adicionarVeiculo() {
     const nome = prompt('Nome do novo veículo:');
     if (nome && nome.trim()) {
+        const placa = prompt('Placa do veículo (ex: ABC-1234):') || '---';
+        vehiclesData.push({
+            name: nome.trim(),
+            plate: placa.toUpperCase(),
+            health: 10,
+            info: 'Manutenção em dia',
+            color: '#22C55E'
+        });
+        render();
         showToast(`Veículo "${nome.trim()}" adicionado com sucesso!`);
     }
 }
@@ -682,9 +720,13 @@ function adicionarVeiculo() {
 function adicionarAba() {
     const input = document.getElementById('new-tab-input');
     if (!input || !input.value.trim()) { showToast('Digite o nome da aba.'); return; }
-    showToast(`Aba "${input.value.trim()}" adicionada!`);
+    const tabName = input.value.trim();
+    customTabsData.push(tabName);
+    render();
+    showToast(`Aba "${tabName}" adicionada!`);
     input.value = '';
 }
+
 
 
 
