@@ -243,7 +243,7 @@ function sidebarTemplate() {
         { id: 'collection', label: 'Coleta', icon: '📥', roles: ['admin', 'gestao'] },
         { id: 'finance', label: 'Financeiro', icon: '💰', roles: ['admin'] },
         { id: 'fleet', label: 'Frota', icon: '🚛', roles: ['admin', 'gestao'] },
-        { id: 'calendar', label: 'Calendário', icon: '📅', roles: ['admin', 'gestao', 'operador'] },
+        { id: 'calendar', label: 'Calendário', icon: '📅', roles: ['admin', 'gestao'] },
         { id: 'messages', label: 'Mensagens', icon: '💬', roles: ['admin', 'gestao', 'operador'] },
         { id: 'profile', label: 'Perfil', icon: '👤', roles: ['admin', 'gestao', 'operador'] }
     ];
@@ -854,6 +854,10 @@ function handleLogin() {
 
     setTimeout(() => {
         if (email === 'felipe.dev@gmail.com' && pass === '123456') {
+            currentState.userRole = 'admin';
+            navigate('home');
+        } else if (email === 'motorista123@gmail.com' && pass === '123456') {
+            currentState.userRole = 'operador';
             navigate('home');
         } else {
             showToast('Credenciais incorretas. Tente novamente.');
