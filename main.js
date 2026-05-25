@@ -4,7 +4,11 @@ let currentState = {
     screen: 'login', // login, home, deliveries, collection, calendar, messages, profile, settings, control_tower, finance, fleet
     activeTab: 'todo', // todo, done, problems
     activeSettingsTab: 'access', // access, tabs
-    userRole: 'admin' // admin, gestao, operador
+    userRole: 'admin', // admin, gestao, operador
+    selectedDeliveryId: null, // Controle do card selecionado (Desktop)
+    deliveryActionState: null, // null, 'entregar', 'problema'
+    isForgotPassword: false, // Controle de toggle no login
+    hasRoute: true // Controle de exibição da Home
 };
 
 // --- Funções de Chat (Logística e Resposta Automática) ---
@@ -62,10 +66,6 @@ function sendMessage() {
     }, 500);
 }
 
-
-
-
-
 const deliveriesData = [
     { id: '101', name: 'João Silva', address: 'Rua das Flores, 123', cep: '01234-000', status: 'todo' },
     { id: '102', name: 'Maria Santos', address: 'Av. Paulista, 1500', cep: '01311-200', status: 'todo' },
@@ -83,22 +83,155 @@ let vehiclesData = [
 let customTabsData = [];
 
 function renderDeliveryCard(d) {
+    const isSelected = currentState.selectedDeliveryId === d.id ? 'selected' : '';
     return `
-        <div class="delivery-card" style="padding: 25px; border-radius: 20px; margin-bottom: 20px; background: white; border: 1px solid #F0F0F0; box-shadow: var(--shadow-sm); display: flex; justify-content: space-between; align-items: center;">
-            <div class="delivery-details" style="flex: 1;">
-                <p class="name" style="font-size: 1.2rem; margin-bottom: 8px; color: var(--primary-blue); font-weight: 800;">👤 ${d.name}</p>
-                <p style="font-weight: 600; color: #444;">📍 ${d.address}</p>
-                <p style="color: #666; margin-top: 5px;">📮 CEP: ${d.cep}</p>
+        <div class="delivery-card ${isSelected}" style="padding: 20px; border-radius: 15px; margin-bottom: 15px; background: white; border: 1px solid #E2E8F0; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; cursor: pointer; transition: all 0.2s;" onclick="selectDelivery('${d.id}')">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                <div class="name" style="font-size: 1.1rem; color: var(--primary-blue); font-weight: 800;">👤 ${d.name}</div>
+                <div style="font-size: 0.8rem; font-weight: 700; color: ${d.status === 'done' ? '#22C55E' : (d.status === 'problems' ? '#EF4444' : '#64748B')};">
+                    ${d.status === 'done' ? '✅ FEITO' : (d.status === 'problems' ? '⚠️ PROBLEMA' : '⏳ A FAZER')}
+                </div>
             </div>
-            <div style="display: flex; gap: 10px; align-items: center;">
+            <div style="font-weight: 600; color: #475569; font-size: 0.9rem;">📍 ${d.address}</div>
+            <div style="color: #94A3B8; font-size: 0.85rem; margin-top: 5px;">📮 CEP: ${d.cep}</div>
+            
+            <!-- Ações Mobile (Oculto no Desktop) -->
+            <div class="delivery-card-actions-mobile" style="display: none; gap: 10px; margin-top: 15px;">
                 ${d.status === 'todo' ? `
-                    <button class="btn-entrar" style="background: #22C55E; width: auto; padding: 10px 20px;" onclick="updateDeliveryStatus('${d.id}', 'done')">Entregar</button>
-                    <button class="btn-entrar" style="background: #EF4444; width: auto; padding: 10px 20px;" onclick="updateDeliveryStatus('${d.id}', 'problems')">Reportar Problema</button>
-                    <button class="btn-entrar" style="background: #64748B; width: auto; padding: 10px 15px;" onclick="openGPS('${d.id}')">📍 GPS</button>
-                ` : `<span style="font-weight: 800; color: ${d.status === 'done' ? '#22C55E' : '#EF4444'}">${d.status === 'done' ? '✅ ENTREGUE' : '⚠️ PROBLEMA'}</span>`}
+                    <button class="btn-success" style="flex: 1; padding: 10px; font-size: 0.85rem;" onclick="event.stopPropagation(); setDeliveryAction('${d.id}', 'entregar')">Entregar</button>
+                    <button class="btn-danger" style="flex: 1; padding: 10px; font-size: 0.85rem;" onclick="event.stopPropagation(); setDeliveryAction('${d.id}', 'problema')">Problema</button>
+                ` : ''}
             </div>
         </div>
     `;
+}
+
+function selectDelivery(id) {
+    currentState.selectedDeliveryId = id;
+    currentState.deliveryActionState = null; // reset action
+    render();
+}
+
+function setDeliveryAction(id, action) {
+    currentState.selectedDeliveryId = id;
+    currentState.deliveryActionState = action;
+    render();
+}
+
+function renderDeliveryRightPanel() {
+    if (!currentState.selectedDeliveryId) {
+        return `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #94A3B8; text-align: center;">
+                <div style="font-size: 4rem; margin-bottom: 20px;">📦</div>
+                <h3 style="font-size: 1.2rem; font-weight: 600;">Selecione uma entrega</h3>
+                <p style="font-size: 0.9rem;">Clique em um card na lista à esquerda para ver os detalhes ou realizar uma baixa.</p>
+            </div>
+        `;
+    }
+
+    const d = deliveriesData.find(x => x.id === currentState.selectedDeliveryId);
+    if (!d) return '';
+
+    if (d.status !== 'todo') {
+        return `
+            <div class="form-section-title">Detalhes da Entrega</div>
+            <div style="margin-bottom: 20px;">
+                <h2 style="color: var(--text-main); margin-bottom: 5px;">${d.name}</h2>
+                <p style="color: var(--text-muted);">${d.address} - ${d.cep}</p>
+            </div>
+            <div style="padding: 20px; background: ${d.status === 'done' ? '#F0FDF4' : '#FEF2F2'}; border-radius: var(--radius-md); border-left: 5px solid ${d.status === 'done' ? 'var(--success)' : 'var(--error)'};">
+                <h3 style="color: ${d.status === 'done' ? 'var(--success)' : 'var(--error)'}; margin-bottom: 10px;">
+                    ${d.status === 'done' ? '✅ Entrega Realizada' : '⚠️ Problema Reportado'}
+                </h3>
+                <p style="font-size: 0.9rem; color: var(--text-muted);">Esta entrega já foi processada.</p>
+            </div>
+        `;
+    }
+
+    if (!currentState.deliveryActionState) {
+        return `
+            <div class="form-section-title">Ações da Entrega</div>
+            <div style="margin-bottom: 20px;">
+                <h2 style="color: var(--text-main); margin-bottom: 5px;">${d.name}</h2>
+                <p style="color: var(--text-muted);">${d.address}</p>
+            </div>
+            <div class="action-grid" style="display: flex; flex-direction: column; gap: 15px;">
+                <button class="btn-success" onclick="setDeliveryAction('${d.id}', 'entregar')">✅ Confirmar Entrega</button>
+                <button class="btn-danger" onclick="setDeliveryAction('${d.id}', 'problema')">⚠️ Reportar Problema</button>
+                <button class="btn-entrar" style="background: var(--text-muted); color: white;" onclick="openGPS('${d.id}')">📍 Abrir no GPS</button>
+            </div>
+        `;
+    }
+
+    if (currentState.deliveryActionState === 'entregar') {
+        return `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #F0F0F0; padding-bottom: 10px;">
+                <div style="font-size: 1.2rem; font-weight: 700; color: var(--success);">Confirmar Entrega</div>
+                <button onclick="setDeliveryAction('${d.id}', null)" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.5rem;">&times;</button>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 15px; flex: 1; overflow-y: auto; padding-right: 5px;">
+                <div class="input-group">
+                    <label style="font-weight: 600; font-size: 0.9rem;">Nome do Recebedor</label>
+                    <input type="text" class="input-field" placeholder="Ex: João da Silva">
+                </div>
+                <div class="input-group">
+                    <label style="font-weight: 600; font-size: 0.9rem;">RG ou CPF</label>
+                    <input type="text" class="input-field" placeholder="000.000.000-00">
+                </div>
+                <div class="input-group">
+                    <label style="font-weight: 600; font-size: 0.9rem;">Parentesco</label>
+                    <input type="text" class="input-field" placeholder="Ex: Próprio, Mãe, Porteiro">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="upload-box" onclick="showToast('Abrindo câmera...')">
+                        <span style="font-size: 1.5rem;">📸</span>
+                        <span style="font-size: 0.8rem; font-weight: 600;">Foto Local</span>
+                    </div>
+                    <div class="upload-box" onclick="showToast('Abrindo câmera...')">
+                        <span style="font-size: 1.5rem;">📦</span>
+                        <span style="font-size: 0.8rem; font-weight: 600;">Foto Pacote</span>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label style="font-weight: 600; font-size: 0.9rem;">Assinatura</label>
+                    <div class="signature-pad"></div>
+                </div>
+                <button class="btn-success" style="margin-top: 10px;" onclick="updateDeliveryStatus('${d.id}', 'done')">Finalizar Entrega</button>
+            </div>
+        `;
+    }
+
+    if (currentState.deliveryActionState === 'problema') {
+        return `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #F0F0F0; padding-bottom: 10px;">
+                <div style="font-size: 1.2rem; font-weight: 700; color: var(--error);">Reportar Problema</div>
+                <button onclick="setDeliveryAction('${d.id}', null)" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.5rem;">&times;</button>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 15px; flex: 1; overflow-y: auto; padding-right: 5px;">
+                <div class="input-group">
+                    <label style="font-weight: 600; font-size: 0.9rem;">Motivo da Falha</label>
+                    <select class="input-field">
+                        <option value="">Selecione um motivo...</option>
+                        <option value="ausente">Ausente</option>
+                        <option value="nao_localizado">Não localizado</option>
+                        <option value="carro_quebrado">Carro quebrado</option>
+                        <option value="fora_rota">Fora de rota</option>
+                        <option value="furto">Furto</option>
+                        <option value="recusa">Recusa em receber</option>
+                    </select>
+                </div>
+                <div class="upload-box" style="padding: 30px;" onclick="showToast('Abrindo câmera...')">
+                    <span style="font-size: 2rem;">📸</span>
+                    <span style="font-size: 0.9rem; font-weight: 600;">Adicionar Foto do Ocorrido</span>
+                </div>
+                <div class="input-group">
+                    <label style="font-weight: 600; font-size: 0.9rem;">Observação</label>
+                    <textarea class="input-field" placeholder="Descreva o problema detalhadamente..."></textarea>
+                </div>
+                <button class="btn-danger" style="margin-top: 10px;" onclick="updateDeliveryStatus('${d.id}', 'problems')">Registrar Problema</button>
+            </div>
+        `;
+    }
 }
 
 
@@ -164,17 +297,16 @@ function progressBar(label, value, color) {
 const screens = {
     login: () => `
         <div class="login-page-container">
-            <header style="width: 100%; padding: 20px 60px; display: flex; justify-content: space-between; align-items: center; background: #01438B; /* Azul logo */ border-bottom: none;">
+            <header style="width: 100%; padding: 20px 60px; display: flex; justify-content: space-between; align-items: center; background: #01438B; border-bottom: none;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <img src="assets/logo_run.png" style="height: 60px; width: auto; object-fit: contain;" alt="RUN">
                 </div>
-                <nav style="display: flex; gap: 40px; font-weight: 600; font-size: 1.05rem; color: #FFB302; /* Amarelo/Laranja */">
+                <nav style="display: flex; gap: 40px; font-weight: 600; font-size: 1.05rem; color: #FFB302;">
                     <span style="cursor: pointer;" onclick="showToast('Em breve!')">Enviar pacotes</span>
                     <span style="cursor: pointer;" onclick="showToast('Em breve!')">Rastrear pacotes</span>
                     <span style="cursor: pointer;" onclick="showToast('Em breve!')">Fazer entregas</span>
                     <span style="cursor: pointer;" onclick="showToast('Em breve!')">Central de Ajuda</span>
                 </nav>
-                <button onclick="document.getElementById('login-email').focus(); document.querySelector('.login-form-container').scrollIntoView({behavior:'smooth'})" class="btn-entrar" style="width: auto; padding: 10px 40px; border-radius: 40px;">Entrar</button>
             </header>
             
             <main style="display: flex; flex: 1; align-items: center; justify-content: center; background: #F8FAFC; padding: 40px;">
@@ -182,72 +314,117 @@ const screens = {
                     <div style="flex: 1; max-width: 500px;">
                         <h1 style="font-size: 4rem; font-weight: 800; line-height: 1.1; margin-bottom: 30px; color: #1E293B;">Vem com a RUN!</h1>
                         <p style="font-size: 2rem; color: #475569; margin-bottom: 50px; line-height: 1.4;">Tecnologia que simplifica sua experiência de envios.</p>
-                        <div style="display: flex; gap: 20px;">
-                            <button class="btn-entrar" onclick="showToast('Em breve!')" style="background: #0084FF; border-radius: 40px; padding: 15px 30px; width: auto;">Quero ser Cliente</button>
-                            <button class="btn-entrar" onclick="showToast('Em breve!')" style="background: #0084FF; border-radius: 40px; padding: 15px 30px; width: auto;">Rastrear um pacote</button>
-                        </div>
                     </div>
 
                     <div class="login-form-container">
-                        <h2 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 25px; color: #1E293B;">Login</h2>
-                        <div class="input-group" style="margin-bottom: 5px;">
-                            <input type="text" id="login-email" class="input-field" placeholder="Email (teste: felipe.dev@gmail.com)">
-                        </div>
-                        <div class="input-group" style="margin-bottom: 5px;">
-                            <input type="password" id="login-password" class="input-field" placeholder="Password">
-                        </div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin: 10px 0 20px;">
-                             <a href="javascript:void(0)" onclick="navigate('forgot')" class="forgot-password" style="font-weight: 600; color: #64748B;">esqueceu ?</a>
-                        </div>
-                        <button class="btn-entrar" onclick="handleLogin()">Entrar</button>
+                        ${currentState.isForgotPassword ? `
+                            <h2 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 25px; color: #1E293B;">Recuperar Senha</h2>
+                            <p style="color: #64748B; margin-bottom: 15px;">Digite seu e-mail para receber as instruções.</p>
+                            <div class="input-group" style="margin-bottom: 20px;">
+                                <input type="email" id="forgot-email" class="input-field" placeholder="Seu Email">
+                            </div>
+                            <button class="btn-entrar" onclick="handleForgotPassword()">Enviar Link</button>
+                            <div style="text-align: center; margin-top: 20px;">
+                                <a href="javascript:void(0)" onclick="toggleForgotPassword(false)" class="forgot-password" style="font-weight: 600; color: #64748B;">← Voltar ao Login</a>
+                            </div>
+                        ` : `
+                            <h2 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 25px; color: #1E293B;">Login</h2>
+                            <div class="input-group" style="margin-bottom: 5px;">
+                                <input type="text" id="login-email" class="input-field" placeholder="Email ou Telefone">
+                            </div>
+                            <div class="input-group" style="margin-bottom: 5px;">
+                                <input type="password" id="login-password" class="input-field" placeholder="Senha">
+                            </div>
+                            <div style="display: flex; justify-content: flex-end; align-items: center; width: 100%; margin: 10px 0 20px;">
+                                 <a href="javascript:void(0)" onclick="toggleForgotPassword(true)" class="forgot-password" style="font-weight: 600; color: #64748B;">esqueceu a senha?</a>
+                            </div>
+                            <button class="btn-entrar" onclick="handleLogin()">Entrar</button>
+                        `}
                     </div>
                 </div>
             </main>
         </div>
     `,
-    home: () => `
+    home: () => {
+        const today = new Date().toLocaleDateString('pt-BR');
+        
+        if (!currentState.hasRoute) {
+            return `
+            <div class="app-layout">
+                ${sidebarTemplate()}
+                <div class="main-content">
+                    <header class="content-header">
+                        <div style="font-weight: 700; color: var(--primary-blue); font-size: 1.1rem;">Bem vindo, Felipe</div>
+                        <div style="color: #64748B;">${today}</div>
+                    </header>
+                    <div style="padding: 40px; display: flex; align-items: center; justify-content: center; height: calc(100vh - 100px);">
+                        <div style="text-align: center; background: white; padding: 50px; border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); max-width: 500px;">
+                            <div style="font-size: 4rem; margin-bottom: 20px;">🛣️</div>
+                            <h2 style="font-size: 1.8rem; margin-bottom: 10px; color: var(--text-main);">Você não possui rotas atribuídas</h2>
+                            <p style="color: var(--text-muted); margin-bottom: 20px;">No momento não há pacotes ou rotas para você. Aguarde a central ou fale com o suporte.</p>
+                            <button class="btn-entrar" style="width: auto; padding: 10px 30px;" onclick="navigate('messages')">Falar com Suporte</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            `;
+        }
+
+        const total = deliveriesData.length;
+        const done = deliveriesData.filter(d => d.status === 'done').length;
+        const problems = deliveriesData.filter(d => d.status === 'problems').length;
+        const todo = deliveriesData.filter(d => d.status === 'todo').length;
+        const eff = total > 0 ? Math.round((done / total) * 100) : 0;
+
+        return `
         <div class="app-layout">
             ${sidebarTemplate()}
             <div class="main-content">
                 <header class="content-header">
-                    <div style="font-weight: 700; color: var(--primary-blue); font-size: 1.1rem;">Bem vindo, Felipe</div>
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <span>🔔</span>
-                        <div style="width: 35px; height: 35px; background: #DDD; border-radius: 50%;"></div>
+                    <div style="font-weight: 700; color: var(--primary-blue); font-size: 1.1rem;">Rota #ROTA-SP-CENTRO</div>
+                    <div style="display: flex; align-items: center; gap: 15px; color: #64748B; font-weight: 600;">
+                        <span>🗓️ ${today}</span>
                     </div>
                 </header>
                 <div style="padding: 40px;">
-                    <h1 style="font-size: 2.2rem; font-weight: 800; margin-bottom: 30px;">Painel do Motorista</h1>
+                    <h1 style="font-size: 2.2rem; font-weight: 800; margin-bottom: 30px;">Painel de Desempenho</h1>
                     
-                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 25px;">
-                        <div class="stat-card" style="border-left: 5px solid var(--primary-blue);">
-                            <div class="label" style="font-size: 1rem; color: #666;">Rota Ativa</div>
-                            <div style="font-size: 1.5rem; font-weight: 800; margin: 10px 0;">#ROTA-SP-CENTRO</div>
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
-                                <span style="font-weight: 600; color: var(--primary-blue);">25 Pacotes</span>
-                                <button class="btn-entrar" style="width: auto; padding: 8px 20px; font-size: 0.85rem;" onclick="navigate('deliveries')">Ver Todas</button>
-                            </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 40px;">
+                        <div class="stat-card" style="background: var(--primary-blue); color: white; border: none; padding: 25px;">
+                            <div class="label" style="color: rgba(255,255,255,0.8); font-size: 0.9rem;">Eficiência</div>
+                            <div style="font-size: 2.5rem; font-weight: 800;">${eff}%</div>
                         </div>
-                        
-                        <div class="stat-card" style="background: var(--primary-blue); color: white;">
-                            <div class="label" style="color: rgba(255,255,255,0.8);">Eficiência Hoje</div>
-                            <div style="font-size: 2.5rem; font-weight: 800; margin: 10px 0;">85%</div>
-                            <div style="margin-top: 10px; font-size: 0.9rem; opacity: 0.9;">10 concluídos / 15 pendentes</div>
+                        <div class="stat-card" style="padding: 25px;">
+                            <div class="label" style="color: var(--text-muted); font-size: 0.9rem;">Total de Pacotes</div>
+                            <div style="font-size: 2.5rem; font-weight: 800; color: var(--text-main);">${total}</div>
+                        </div>
+                        <div class="stat-card" style="padding: 25px; border-bottom: 4px solid var(--success);">
+                            <div class="label" style="color: var(--text-muted); font-size: 0.9rem;">Feitos</div>
+                            <div style="font-size: 2.5rem; font-weight: 800; color: var(--success);">${done}</div>
+                        </div>
+                        <div class="stat-card" style="padding: 25px; border-bottom: 4px solid var(--warning);">
+                            <div class="label" style="color: var(--text-muted); font-size: 0.9rem;">Em Aberto</div>
+                            <div style="font-size: 2.5rem; font-weight: 800; color: var(--warning);">${todo}</div>
+                        </div>
+                        <div class="stat-card" style="padding: 25px; border-bottom: 4px solid var(--error);">
+                            <div class="label" style="color: var(--text-muted); font-size: 0.9rem;">Problemas</div>
+                            <div style="font-size: 2.5rem; font-weight: 800; color: var(--error);">${problems}</div>
                         </div>
                     </div>
 
-                    <div style="margin-top: 50px;">
-                        <h2 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 20px;">Resumo Diário</h2>
-                        <div class="delivery-bars" style="background: white; padding: 30px; border-radius: 20px; box-shadow: var(--shadow-sm);">
-                            ${progressBar('Completado', 10, '#22C55E')}
-                            ${progressBar('Em rota', 12, '#0A58CA')}
-                            ${progressBar('Problemas', 3, '#EF4444')}
+                    <div style="background: white; padding: 30px; border-radius: var(--radius-xl); box-shadow: var(--shadow-sm);">
+                        <h2 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 20px;">Progresso da Rota</h2>
+                        <div class="delivery-bars">
+                            ${progressBar('Completado', done, 'var(--success)')}
+                            ${progressBar('Em rota', todo, 'var(--primary-blue)')}
+                            ${progressBar('Problemas', problems, 'var(--error)')}
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    `,
+        `;
+    },
     control_tower: () => `
         <div class="app-layout">
             ${sidebarTemplate()}
@@ -392,12 +569,18 @@ const screens = {
                 </div>
 
                 <div class="content-padding" style="padding: 0 40px 40px;">
-                    <div class="search-container" style="margin-bottom: 25px;">
-                        <input type="text" id="search-input" class="input-field" placeholder="Buscar por nome, endereço ou CEP...">
-                    </div>
-
-                    <div class="delivery-list" id="delivery-list-container">
-                        <!-- Gerado dinamicamente -->
+                    <div class="delivery-split-view">
+                        <div class="deliveries-left-col">
+                            <div class="search-container" style="margin-bottom: 25px;">
+                                <input type="text" id="search-input" class="input-field" placeholder="Buscar por nome, endereço ou CEP...">
+                            </div>
+                            <div class="delivery-list" id="delivery-list-container">
+                                <!-- Gerado dinamicamente -->
+                            </div>
+                        </div>
+                        <div class="deliveries-right-col right-panel-desktop" id="delivery-details-container">
+                            ${renderDeliveryRightPanel()}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -766,3 +949,8 @@ document.addEventListener('input', function(e) {
         }
     }
 });
+
+function toggleForgotPassword(show) {
+    currentState.isForgotPassword = show;
+    render();
+}
