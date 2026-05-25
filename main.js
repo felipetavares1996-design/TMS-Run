@@ -239,8 +239,8 @@ function sidebarTemplate() {
     const items = [
         { id: 'home', label: 'Home', icon: '🏠', roles: ['admin', 'gestao', 'operador'] },
         { id: 'control_tower', label: 'Torre de Controle', icon: '📡', roles: ['admin', 'gestao'] },
-        { id: 'deliveries', label: 'Entregas', icon: '📦', roles: ['admin', 'gestao', 'operador'] },
-        { id: 'collection', label: 'Coleta', icon: '📥', roles: ['admin', 'gestao', 'operador'] },
+        { id: 'deliveries', label: 'Entregas', icon: '📦', roles: ['admin', 'gestao'] },
+        { id: 'collection', label: 'Coleta', icon: '📥', roles: ['admin', 'gestao'] },
         { id: 'finance', label: 'Financeiro', icon: '💰', roles: ['admin'] },
         { id: 'fleet', label: 'Frota', icon: '🚛', roles: ['admin', 'gestao'] },
         { id: 'calendar', label: 'Calendário', icon: '📅', roles: ['admin', 'gestao', 'operador'] },
@@ -347,7 +347,84 @@ const screens = {
     `,
     home: () => {
         const today = new Date().toLocaleDateString('pt-BR');
+        const nowTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
         
+        if (currentState.userRole === 'operador') {
+            if (!currentState.hasRoute) {
+                return `
+                <div class="app-layout">
+                    ${sidebarTemplate()}
+                    <div class="main-content" style="background: var(--background-light);">
+                        <header class="content-header" style="flex-direction: column; align-items: flex-start; padding: 25px 20px; background: var(--primary-blue); color: white; border-radius: 0 0 25px 25px;">
+                            <div style="display: flex; justify-content: space-between; width: 100%; margin-bottom: 5px;">
+                                <div style="font-weight: 700; font-size: 1.1rem;">Sem Rota Ativa</div>
+                                <div style="font-weight: 600;">${nowTime}</div>
+                            </div>
+                            <div style="font-size: 0.9rem; opacity: 0.9;">🗓️ ${today}</div>
+                        </header>
+                        <div style="padding: 40px 20px; display: flex; align-items: center; justify-content: center; text-align: center;">
+                            <div>
+                                <div style="font-size: 4rem; margin-bottom: 20px;">🛣️</div>
+                                <h2 style="font-size: 1.5rem; margin-bottom: 10px; color: var(--text-main);">Aguardando Rota</h2>
+                                <p style="color: var(--text-muted); margin-bottom: 20px;">Você ainda não tem pacotes para hoje.</p>
+                                <button class="btn-entrar" style="width: auto; padding: 10px 30px;" onclick="navigate('messages')">Falar com Suporte</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                `;
+            }
+
+            const total = deliveriesData.length;
+            const done = deliveriesData.filter(d => d.status === 'done').length;
+            const problems = deliveriesData.filter(d => d.status === 'problems').length;
+            const todo = deliveriesData.filter(d => d.status === 'todo').length;
+
+            return `
+            <div class="app-layout">
+                ${sidebarTemplate()}
+                <div class="main-content" style="background: #F8FAFC;">
+                    <header class="content-header" style="flex-direction: column; align-items: flex-start; padding: 25px 20px; background: var(--primary-blue); color: white; border-radius: 0 0 25px 25px; margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; width: 100%; margin-bottom: 10px;">
+                            <div style="font-weight: 700; font-size: 1.1rem;">#ROTA-SP-CENTRO</div>
+                            <div style="font-weight: 600;">${nowTime}</div>
+                        </div>
+                        <div style="font-size: 0.9rem; opacity: 0.9;">🗓️ ${today}</div>
+                    </header>
+                    
+                    <div style="padding: 0 20px 40px;">
+                        <div class="driver-header-summary">
+                            <div class="driver-stat-box">
+                                <div class="val" style="color: var(--text-main);">${total}</div>
+                                <div class="lbl">Total</div>
+                            </div>
+                            <div class="driver-stat-box" style="border: 2px solid var(--primary-blue);">
+                                <div class="val" style="color: var(--primary-blue);">${todo}</div>
+                                <div class="lbl" style="color: var(--primary-blue);">A Fazer</div>
+                            </div>
+                            <div class="driver-stat-box">
+                                <div class="val" style="color: var(--error);">${problems}</div>
+                                <div class="lbl" style="color: var(--error);">Problemas</div>
+                            </div>
+                        </div>
+
+                        <div class="tabs-container" style="margin: 0 0 20px 0;">
+                            <div class="tab ${currentState.activeTab === 'todo' ? 'active' : ''}" onclick="setTab('todo')">A FAZER</div>
+                            <div class="tab ${currentState.activeTab === 'done' ? 'active' : ''}" onclick="setTab('done')">FEITO</div>
+                            <div class="tab ${currentState.activeTab === 'problems' ? 'active' : ''}" onclick="setTab('problems')">PROBLEMAS</div>
+                        </div>
+
+                        <div class="delivery-list" id="delivery-list-container">
+                            ${deliveriesData.filter(d => d.status === currentState.activeTab).map(renderDeliveryCardDriver).join('') || '<div style="text-align:center; padding: 40px; color:#94A3B8;">Nenhuma entrega aqui.</div>'}
+                        </div>
+                    </div>
+                </div>
+                ${renderDriverModal()}
+            </div>
+            `;
+        }
+
+        // --- Admin / Gestão View ---
         if (!currentState.hasRoute) {
             return `
             <div class="app-layout">
@@ -953,4 +1030,135 @@ document.addEventListener('input', function(e) {
 function toggleForgotPassword(show) {
     currentState.isForgotPassword = show;
     render();
+}
+
+// --- Funções Exclusivas do Motorista (Mobile-First) ---
+function renderDeliveryCardDriver(d) {
+    return `
+        <div class="delivery-card" style="padding: 20px; border-radius: 15px; margin-bottom: 15px; background: white; border: 1px solid #E2E8F0; box-shadow: var(--shadow-sm); display: flex; flex-direction: column;" onclick="openDriverModal('${d.id}')">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                <div class="name" style="font-size: 1.1rem; color: var(--primary-blue); font-weight: 800;">👤 ${d.name}</div>
+                <button class="btn-entrar" style="width: auto; padding: 5px 10px; font-size: 0.8rem; background: #F1F5F9; color: var(--text-main); border: 1px solid #CBD5E1; box-shadow: none;" onclick="event.stopPropagation(); openGPS('${d.id}')">📍 GPS</button>
+            </div>
+            <div style="font-weight: 600; color: #475569; font-size: 0.9rem;">📍 ${d.address}</div>
+            <div style="color: #94A3B8; font-size: 0.85rem; margin-top: 5px;">📮 CEP: ${d.cep}</div>
+            
+            ${d.status === 'todo' ? `
+                <div style="color: var(--primary-blue); font-weight: 700; font-size: 0.85rem; margin-top: 15px; text-align: center; background: #EFF6FF; padding: 10px; border-radius: 10px;">Tocar para opções de entrega</div>
+            ` : `
+                <div style="font-size: 0.85rem; font-weight: 700; color: ${d.status === 'done' ? '#22C55E' : '#EF4444'}; margin-top: 15px;">
+                    ${d.status === 'done' ? '✅ FEITO' : '⚠️ PROBLEMA'}
+                </div>
+            `}
+        </div>
+    `;
+}
+
+function openDriverModal(id) {
+    if (currentState.userRole !== 'operador') return;
+    const d = deliveriesData.find(x => x.id === id);
+    if (!d || d.status !== 'todo') return; 
+    currentState.selectedDeliveryId = id;
+    currentState.deliveryActionState = null;
+    render();
+}
+
+function closeDriverModal() {
+    currentState.selectedDeliveryId = null;
+    currentState.deliveryActionState = null;
+    render();
+}
+
+function renderDriverModal() {
+    if (!currentState.selectedDeliveryId) return '';
+    const d = deliveriesData.find(x => x.id === currentState.selectedDeliveryId);
+    if (!d) return '';
+
+    let content = '';
+
+    if (!currentState.deliveryActionState) {
+        content = `
+            <h2 style="font-size: 1.5rem; margin-bottom: 10px; color: var(--primary-blue);">Opções de Entrega</h2>
+            <p style="color: var(--text-muted); margin-bottom: 25px; font-weight: 600;">${d.name} <br> <span style="font-size: 0.9rem; font-weight: 400;">${d.address}</span></p>
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+                <button class="btn-success" style="padding: 20px; font-size: 1.1rem; border-radius: 15px;" onclick="setDeliveryAction('${d.id}', 'entregar')">✅ Entregar Pacote</button>
+                <button class="btn-danger" style="padding: 20px; font-size: 1.1rem; border-radius: 15px;" onclick="setDeliveryAction('${d.id}', 'problema')">⚠️ Relatar Problema</button>
+            </div>
+        `;
+    } else if (currentState.deliveryActionState === 'entregar') {
+        content = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="font-size: 1.3rem; color: var(--success); margin: 0;">✅ Confirmar Entrega</h2>
+                <button onclick="setDeliveryAction('${d.id}', null)" style="background: none; border: none; font-size: 1.5rem; color: #94A3B8; cursor: pointer;">&larr;</button>
+            </div>
+            <div class="input-group" style="margin-bottom: 15px;">
+                <label style="font-weight: 600; font-size: 0.9rem;">Nome do Recebedor</label>
+                <input type="text" class="input-field" placeholder="Quem recebeu?">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                <div class="input-group">
+                    <label style="font-weight: 600; font-size: 0.9rem;">RG ou CPF</label>
+                    <input type="text" class="input-field" placeholder="000.000.000-00">
+                </div>
+                <div class="input-group">
+                    <label style="font-weight: 600; font-size: 0.9rem;">Parentesco</label>
+                    <input type="text" class="input-field" placeholder="Ex: Próprio...">
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                <div class="upload-box" style="padding: 20px; background: #F8FAFC;" onclick="showToast('Abrindo câmera...')">
+                    <span style="font-size: 1.5rem;">📸</span><br><small style="font-weight:600;">Foto Local</small>
+                </div>
+                <div class="upload-box" style="padding: 20px; background: #F8FAFC;" onclick="showToast('Abrindo câmera...')">
+                    <span style="font-size: 1.5rem;">📦</span><br><small style="font-weight:600;">Foto Pacote</small>
+                </div>
+            </div>
+            <div class="input-group" style="margin-bottom: 20px;">
+                <label style="font-weight: 600; font-size: 0.9rem;">Assinatura</label>
+                <div class="signature-pad" style="height: 100px;"></div>
+            </div>
+            <button class="btn-success" style="padding: 20px; font-size: 1.1rem; border-radius: 15px;" onclick="closeAndComplete('${d.id}', 'done')">Finalizar Entrega</button>
+        `;
+    } else if (currentState.deliveryActionState === 'problema') {
+        content = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="font-size: 1.3rem; color: var(--error); margin: 0;">⚠️ Relatar Problema</h2>
+                <button onclick="setDeliveryAction('${d.id}', null)" style="background: none; border: none; font-size: 1.5rem; color: #94A3B8; cursor: pointer;">&larr;</button>
+            </div>
+            <div class="input-group" style="margin-bottom: 15px;">
+                <label style="font-weight: 600; font-size: 0.9rem;">Motivo da Falha</label>
+                <select class="input-field">
+                    <option value="">Selecione um motivo...</option>
+                    <option value="ausente">Ausente</option>
+                    <option value="nao_localizado">Não localizado</option>
+                    <option value="carro_quebrado">Carro quebrado</option>
+                    <option value="fora_rota">Fora de rota</option>
+                    <option value="furto">Furto</option>
+                    <option value="recusa">Recusa em receber</option>
+                </select>
+            </div>
+            <div class="upload-box" style="padding: 30px; margin-bottom: 15px; background: #F8FAFC;" onclick="showToast('Abrindo câmera...')">
+                <span style="font-size: 2rem;">📸</span><br><small style="font-weight:600;">Adicionar Foto do Ocorrido</small>
+            </div>
+            <div class="input-group" style="margin-bottom: 20px;">
+                <label style="font-weight: 600; font-size: 0.9rem;">Observação</label>
+                <textarea class="input-field" placeholder="Descreva o problema detalhadamente..."></textarea>
+            </div>
+            <button class="btn-danger" style="padding: 20px; font-size: 1.1rem; border-radius: 15px;" onclick="closeAndComplete('${d.id}', 'problems')">Registrar Problema</button>
+        `;
+    }
+
+    return `
+        <div class="driver-modal-overlay" onclick="closeDriverModal()">
+            <div class="driver-modal-content" onclick="event.stopPropagation()">
+                <div style="width: 50px; height: 6px; background: #E2E8F0; border-radius: 10px; margin: 0 auto 20px;"></div>
+                ${content}
+            </div>
+        </div>
+    `;
+}
+
+function closeAndComplete(id, status) {
+    updateDeliveryStatus(id, status);
+    closeDriverModal();
 }
