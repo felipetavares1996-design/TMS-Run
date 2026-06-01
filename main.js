@@ -8,7 +8,7 @@ let currentState = {
     selectedDeliveryId: null, // Controle do card selecionado (Desktop)
     deliveryActionState: null, // null, 'entregar', 'problema'
     isForgotPassword: false, // Controle de toggle no login
-    hasRoute: true // Controle de exibição da Home
+    hasRoute: false // Controle de exibição da Home
 };
 
 // --- Funções de Chat (Logística e Resposta Automática) ---
@@ -67,12 +67,12 @@ function sendMessage() {
 }
 
 const deliveriesData = [
-    { id: '101', name: 'João Silva', address: 'Rua das Flores, 123', cep: '01234-000', status: 'todo' },
-    { id: '102', name: 'Maria Santos', address: 'Av. Paulista, 1500', cep: '01311-200', status: 'todo' },
-    { id: '103', name: 'Pedro Oliveira', address: 'Rua Augusta, 500', cep: '01305-000', status: 'done' },
-    { id: '104', name: 'Ana Costa', address: 'Alameda Santos, 200', cep: '01419-001', status: 'problems' },
-    { id: '105', name: 'Carlos Souza', address: 'Rua Haddock Lobo, 800', cep: '01414-001', status: 'todo' },
-    { id: '106', name: 'Lucia Lima', address: 'Rua Oscar Freire, 1000', cep: '01426-000', status: 'done' }
+    { id: '101', name: 'João Silva', address: 'Rua das Flores, 123', cep: '01234-000', status: 'todo', lat: -23.5684, lng: -46.6502 },
+    { id: '102', name: 'Maria Santos', address: 'Av. Paulista, 1500', cep: '01311-200', status: 'todo', lat: -23.5615, lng: -46.6562 },
+    { id: '103', name: 'Pedro Oliveira', address: 'Rua Augusta, 500', cep: '01305-000', status: 'done', lat: -23.5489, lng: -46.6496 },
+    { id: '104', name: 'Ana Costa', address: 'Alameda Santos, 200', cep: '01419-001', status: 'problems', lat: -23.5721, lng: -46.6431 },
+    { id: '105', name: 'Carlos Souza', address: 'Rua Haddock Lobo, 800', cep: '01414-001', status: 'todo', lat: -23.5583, lng: -46.6669 },
+    { id: '106', name: 'Lucia Lima', address: 'Rua Oscar Freire, 1000', cep: '01426-000', status: 'done', lat: -23.5651, lng: -46.6698 }
 ];
 
 let vehiclesData = [
@@ -351,28 +351,70 @@ const screens = {
         
         if (currentState.userRole === 'operador') {
             if (!currentState.hasRoute) {
-                return `
-                <div class="app-layout">
-                    ${sidebarTemplate()}
-                    <div class="main-content" style="background: var(--background-light);">
-                        <header class="content-header" style="flex-direction: column; align-items: flex-start; padding: 25px 20px; background: var(--primary-blue); color: white; border-radius: 0 0 25px 25px;">
-                            <div style="display: flex; justify-content: space-between; width: 100%; margin-bottom: 5px;">
-                                <div style="font-weight: 700; font-size: 1.1rem;">Sem Rota Ativa</div>
-                                <div style="font-weight: 600;">${nowTime}</div>
-                            </div>
-                            <div style="font-size: 0.9rem; opacity: 0.9;">🗓️ ${today}</div>
-                        </header>
-                        <div style="padding: 40px 20px; display: flex; align-items: center; justify-content: center; text-align: center;">
-                            <div>
-                                <div style="font-size: 4rem; margin-bottom: 20px;">🛣️</div>
-                                <h2 style="font-size: 1.5rem; margin-bottom: 10px; color: var(--text-main);">Aguardando Rota</h2>
-                                <p style="color: var(--text-muted); margin-bottom: 20px;">Você ainda não tem pacotes para hoje.</p>
-                                <button class="btn-entrar" style="width: auto; padding: 10px 30px;" onclick="navigate('messages')">Falar com Suporte</button>
+                if (!currentState.isScanning) {
+                    return `
+                    <div class="app-layout">
+                        ${sidebarTemplate()}
+                        <div class="main-content" style="background: var(--background-light);">
+                            <header class="content-header" style="flex-direction: column; align-items: flex-start; padding: 25px 20px; background: var(--primary-blue); color: white; border-radius: 0 0 25px 25px; width: 100%; border: none;">
+                                <div style="display: flex; justify-content: space-between; width: 100%; margin-bottom: 5px;">
+                                    <div style="font-weight: 700; font-size: 1.1rem;">Sem Rota Ativa</div>
+                                    <div style="font-weight: 600;">${nowTime}</div>
+                                </div>
+                                <div style="font-size: 0.9rem; opacity: 0.9;">🗓️ ${today}</div>
+                            </header>
+                            <div class="associar-rota-container">
+                                <div class="associar-rota-card">
+                                    <div style="font-size: 4.5rem; margin-bottom: 10px;">📲</div>
+                                    <h2 style="font-size: 1.8rem; font-weight: 800; color: var(--text-main);">Associar Rota</h2>
+                                    <p style="color: var(--text-muted); line-height: 1.5; font-size: 0.95rem;">Escanear o QR Code de um pacote de entrega para vincular a rota correspondente ao seu perfil de motorista.</p>
+                                    <button class="btn-entrar" style="padding: 16px; font-size: 1.05rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-premium); background: var(--primary-blue); margin-top: 15px;" onclick="startQRScanner()">📷 Escanear QR Code</button>
+                                    <button class="btn-entrar" style="padding: 12px; font-size: 0.9rem; border-radius: var(--radius-lg); background: #F1F5F9; color: var(--text-main); border: 1.5px dashed #CBD5E1; box-shadow: none;" onclick="simulateQuickScan()">Simular Associação Direta</button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                `;
+                    `;
+                } else {
+                    return `
+                    <div class="app-layout">
+                        ${sidebarTemplate()}
+                        <div class="main-content" style="background: var(--background-light);">
+                            <header class="content-header" style="flex-direction: column; align-items: flex-start; padding: 25px 20px; background: var(--primary-blue); color: white; border-radius: 0 0 25px 25px; width: 100%; border: none;">
+                                <div style="display: flex; justify-content: space-between; width: 100%; margin-bottom: 5px;">
+                                    <div style="font-weight: 700; font-size: 1.1rem;">Scanner de Rota</div>
+                                    <div style="font-weight: 600;">${nowTime}</div>
+                                </div>
+                            </header>
+                            <div class="associar-rota-container">
+                                <div class="associar-rota-card" style="gap: 15px;">
+                                    <h3 style="font-size: 1.4rem; font-weight: 700; color: var(--text-main);">Escanear Pacote</h3>
+                                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 5px;">Aponte o leitor para o QR Code impresso na etiqueta do pacote.</p>
+                                    
+                                    <div class="scanner-viewport">
+                                        <video id="scanner-video-feed" class="scanner-video" autoplay playsinline style="display: none;"></video>
+                                        <div id="scanner-mock" class="scanner-mock-preview">
+                                            <span class="scanner-mock-qrcode">🔳</span>
+                                            <small style="color: rgba(255,255,255,0.7); font-weight: 600;">Ativando câmera...</small>
+                                        </div>
+                                        <div class="scanner-target-box"></div>
+                                        <div class="scanner-corner tl"></div>
+                                        <div class="scanner-corner tr"></div>
+                                        <div class="scanner-corner bl"></div>
+                                        <div class="scanner-corner br"></div>
+                                        <div class="scanner-laser-line"></div>
+                                    </div>
+                                    
+                                    <div style="display: flex; flex-direction: column; width: 100%; gap: 10px; margin-top: 10px;">
+                                        <button class="btn-entrar" style="background: var(--success); padding: 12px;" onclick="triggerScanSuccess()">⚡ Forçar Bipe de Sucesso</button>
+                                        <button class="btn-entrar" style="background: #64748B; padding: 12px;" onclick="cancelQRScanner()">Cancelar Leitura</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                }
             }
 
             const total = deliveriesData.length;
@@ -384,38 +426,47 @@ const screens = {
             <div class="app-layout">
                 ${sidebarTemplate()}
                 <div class="main-content" style="background: #F8FAFC;">
-                    <header class="content-header" style="flex-direction: column; align-items: flex-start; padding: 25px 20px; background: var(--primary-blue); color: white; border-radius: 0 0 25px 25px; margin-bottom: 20px;">
-                        <div style="display: flex; justify-content: space-between; width: 100%; margin-bottom: 10px;">
-                            <div style="font-weight: 700; font-size: 1.1rem;">#ROTA-SP-CENTRO</div>
-                            <div style="font-weight: 600;">${nowTime}</div>
-                        </div>
-                        <div style="font-size: 0.9rem; opacity: 0.9;">🗓️ ${today}</div>
-                    </header>
-                    
-                    <div style="padding: 0 20px 40px;">
-                        <div class="driver-header-summary">
-                            <div class="driver-stat-box">
-                                <div class="val" style="color: var(--text-main);">${total}</div>
-                                <div class="lbl">Total</div>
+                    <div class="driver-home-active-layout">
+                        <header class="content-header" style="flex-direction: column; align-items: flex-start; padding: 20px 20px; background: var(--primary-blue); color: white; border-radius: 0 0 25px 25px; flex-shrink: 0; border: none;">
+                            <div style="display: flex; justify-content: space-between; width: 100%; align-items: center; margin-bottom: 5px;">
+                                <div style="font-weight: 800; font-size: 1.25rem; display: flex; align-items: center; gap: 10px;">🛣️ Rota Zona Sul <span class="badge green" style="font-size: 0.7rem; font-weight: 800; padding: 3px 8px; border-radius: 20px; background: #D1FFED; color: #00875A;">ATIVA</span></div>
+                                <div style="font-weight: 600; font-size: 0.9rem; opacity: 0.8;">${nowTime}</div>
                             </div>
-                            <div class="driver-stat-box" style="border: 2px solid var(--primary-blue);">
-                                <div class="val" style="color: var(--primary-blue);">${todo}</div>
-                                <div class="lbl" style="color: var(--primary-blue);">A Fazer</div>
-                            </div>
-                            <div class="driver-stat-box">
-                                <div class="val" style="color: var(--error);">${problems}</div>
-                                <div class="lbl" style="color: var(--error);">Problemas</div>
-                            </div>
+                            <div style="font-size: 0.8rem; opacity: 0.8; font-weight: 500;">🗓️ ${today} | Felipe (Motorista)</div>
+                        </header>
+                        
+                        <div class="driver-map-wrapper">
+                            <div id="driver-map"></div>
                         </div>
-
-                        <div class="tabs-container" style="margin: 0 0 20px 0;">
-                            <div class="tab ${currentState.activeTab === 'todo' ? 'active' : ''}" onclick="setTab('todo')">A FAZER</div>
-                            <div class="tab ${currentState.activeTab === 'done' ? 'active' : ''}" onclick="setTab('done')">FEITO</div>
-                            <div class="tab ${currentState.activeTab === 'problems' ? 'active' : ''}" onclick="setTab('problems')">PROBLEMAS</div>
-                        </div>
-
-                        <div class="delivery-list" id="delivery-list-container">
-                            ${deliveriesData.filter(d => d.status === currentState.activeTab).map(renderDeliveryCardDriver).join('') || '<div style="text-align:center; padding: 40px; color:#94A3B8;">Nenhuma entrega aqui.</div>'}
+                        
+                        <div class="driver-route-bottom-sheet">
+                            <div style="width: 40px; height: 5px; background: #CBD5E1; border-radius: 10px; margin: 0 auto 15px; flex-shrink: 0;"></div>
+                            
+                            <div class="driver-header-summary" style="margin-bottom: 15px; flex-shrink: 0;">
+                                <div class="driver-stat-box">
+                                    <div class="val" style="color: var(--text-main); font-size: 1.5rem;">${total}</div>
+                                    <div class="lbl" style="font-size: 0.65rem;">Total</div>
+                                </div>
+                                <div class="driver-stat-box" style="border: 2.5px solid var(--primary-blue);">
+                                    <div class="val" style="color: var(--primary-blue); font-size: 1.5rem;">${todo}</div>
+                                    <div class="lbl" style="color: var(--primary-blue); font-size: 0.65rem;">A Fazer</div>
+                                </div>
+                                <div class="driver-stat-box">
+                                    <div class="val" style="color: var(--error); font-size: 1.5rem;">${problems}</div>
+                                    <div class="lbl" style="color: var(--error); font-size: 0.65rem;">Problemas</div>
+                                </div>
+                            </div>
+                            
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-shrink: 0;">
+                                <h4 style="font-weight: 800; color: var(--text-main); font-size: 1.05rem; margin: 0;">Lista de Entregas</h4>
+                                <div style="display: flex; gap: 5px;">
+                                    <button class="tab active" style="font-size: 0.75rem; padding: 6px 12px; border-radius: 15px; background: #EFF6FF; color: var(--primary-blue); font-weight: 700; border: none; cursor: default;">Roteiro Atual</button>
+                                </div>
+                            </div>
+                            
+                            <div class="delivery-list" style="overflow-y: auto;">
+                                ${deliveriesData.map(renderDeliveryCardDriver).join('')}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -926,6 +977,10 @@ function render() {
         app.innerHTML = screens[currentState.screen]();
     }
 
+    if (currentState.screen === 'home' && currentState.userRole === 'operador' && currentState.hasRoute) {
+        initDriverMap();
+    }
+
     if (currentState.screen === 'deliveries') {
         const listContainer = document.getElementById('delivery-list-container');
         if (listContainer) {
@@ -1165,4 +1220,156 @@ function renderDriverModal() {
 function closeAndComplete(id, status) {
     updateDeliveryStatus(id, status);
     closeDriverModal();
+}
+
+// --- Funções de Scanner e Mapa (Nova Funcionalidade) ---
+let streamRef = null;
+let driverMapInstance = null;
+
+function playBeepSound() {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
+        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        oscillator.start();
+        setTimeout(() => {
+            oscillator.stop();
+            audioCtx.close();
+        }, 150);
+    } catch (e) {
+        console.error("Audio error:", e);
+    }
+}
+
+function startQRScanner() {
+    currentState.isScanning = true;
+    render();
+    
+    const video = document.getElementById('scanner-video-feed');
+    const mock = document.getElementById('scanner-mock');
+    
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+        .then(stream => {
+            streamRef = stream;
+            if (video) {
+                video.srcObject = stream;
+                video.style.display = 'block';
+            }
+            if (mock) {
+                mock.style.display = 'none';
+            }
+            
+            setTimeout(() => {
+                if (currentState.isScanning) {
+                    triggerScanSuccess();
+                }
+            }, 3000);
+        })
+        .catch(err => {
+            console.log("Erro na câmera (usando simulador):", err);
+            if (mock) {
+                const label = mock.querySelector('small');
+                if (label) label.textContent = 'Simulando Scanner...';
+            }
+            
+            setTimeout(() => {
+                if (currentState.isScanning) {
+                    triggerScanSuccess();
+                }
+            }, 3000);
+        });
+}
+
+function cancelQRScanner() {
+    if (streamRef) {
+        streamRef.getTracks().forEach(track => track.stop());
+        streamRef = null;
+    }
+    currentState.isScanning = false;
+    render();
+}
+
+function simulateQuickScan() {
+    triggerScanSuccess();
+}
+
+function triggerScanSuccess() {
+    playBeepSound();
+    if (streamRef) {
+        streamRef.getTracks().forEach(track => track.stop());
+        streamRef = null;
+    }
+    currentState.hasRoute = true;
+    currentState.isScanning = false;
+    showToast("Pacote bipado! Rota Zona Sul associada com sucesso.");
+    navigate('home');
+}
+
+function initDriverMap() {
+    setTimeout(() => {
+        const mapDiv = document.getElementById('driver-map');
+        if (!mapDiv) return;
+
+        if (driverMapInstance) {
+            try {
+                driverMapInstance.remove();
+            } catch (e) {
+                console.error("Map removal error:", e);
+            }
+            driverMapInstance = null;
+        }
+
+        const center = [-23.5615, -46.6562];
+        driverMapInstance = L.map('driver-map', {
+            zoomControl: false,
+            attributionControl: false
+        }).setView(center, 14);
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            maxZoom: 20
+        }).addTo(driverMapInstance);
+
+        L.control.zoom({
+            position: 'bottomright'
+        }).addTo(driverMapInstance);
+
+        deliveriesData.forEach((d, idx) => {
+            if (!d.lat || !d.lng) return;
+
+            let markerColorClass = '';
+            if (d.status === 'done') markerColorClass = 'done';
+            else if (d.status === 'problems') markerColorClass = 'problem';
+
+            const customIcon = L.divIcon({
+                className: 'custom-leaflet-marker-wrapper',
+                html: `<div class="custom-delivery-pin ${markerColorClass}">${idx + 1}</div>`,
+                iconSize: [32, 40],
+                iconAnchor: [16, 40],
+                popupAnchor: [0, -36]
+            });
+
+            const marker = L.marker([d.lat, d.lng], { icon: customIcon }).addTo(driverMapInstance);
+            
+            const popupContent = `
+                <div style="font-family: 'Plus Jakarta Sans', sans-serif; padding: 5px;">
+                    <div style="font-weight: 800; color: var(--primary-blue); font-size: 0.95rem; margin-bottom: 3px;">👤 ${d.name}</div>
+                    <div style="font-weight: 600; color: #475569; font-size: 0.75rem; line-height: 1.3;">📍 ${d.address}</div>
+                    <div style="margin-top: 8px; display: flex; gap: 5px;">
+                        <span style="font-size: 0.7rem; font-weight: 800; padding: 2px 6px; border-radius: 10px; background: ${d.status === 'done' ? '#D1FFED' : (d.status === 'problems' ? '#FFD1D1' : '#EFF6FF')}; color: ${d.status === 'done' ? '#00875A' : (d.status === 'problems' ? '#D40000' : 'var(--primary-blue)')};">
+                            ${d.status === 'done' ? 'FEITO' : (d.status === 'problems' ? 'PROBLEMA' : 'A FAZER')}
+                        </span>
+                    </div>
+                </div>
+            `;
+            marker.bindPopup(popupContent);
+        });
+    }, 50);
 }
