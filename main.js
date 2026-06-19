@@ -1,5 +1,20 @@
 const app = document.getElementById('app');
 
+// --- PWA & Estado Local ---
+let deferredPrompt = null;
+let isOnline = navigator.onLine;
+let scannedProductsData = [
+    {
+        id: 'PRD-init-1',
+        code: '6457897',
+        name: 'Ana Maria Silva',
+        address: 'Rua Augusta, 450 - Consolação, São Paulo - SP',
+        route: 'SP',
+        timestamp: new Date().toLocaleString('pt-BR'),
+        status: 'Roteirizado'
+    }
+];
+
 let currentState = {
     screen: 'login', // login, home, deliveries, collection, calendar, messages, profile, settings, control_tower, finance, fleet
     activeTab: 'todo', // todo, done, problems
@@ -8,8 +23,129 @@ let currentState = {
     selectedDeliveryId: null, // Controle do card selecionado (Desktop)
     deliveryActionState: null, // null, 'entregar', 'problema'
     isForgotPassword: false, // Controle de toggle no login
-    hasRoute: false // Controle de exibição da Home
+    hasRoute: false, // Controle de exibição da Home
+    scannerContext: 'driver_route' // driver_route, admin_product
 };
+
+function saveStateToLocalStorage() {
+    try {
+        localStorage.setItem('tms_run_state', JSON.stringify(currentState));
+        localStorage.setItem('tms_run_deliveries', JSON.stringify(deliveriesData));
+        localStorage.setItem('tms_run_vehicles', JSON.stringify(vehiclesData));
+        localStorage.setItem('tms_run_custom_tabs', JSON.stringify(customTabsData));
+        localStorage.setItem('tms_run_scanned_products', JSON.stringify(scannedProductsData));
+    } catch (e) {
+        console.error('Falha ao salvar no localStorage:', e);
+    }
+}
+
+function loadStateFromLocalStorage() {
+    try {
+        const savedState = localStorage.getItem('tms_run_state');
+        const savedDeliveries = localStorage.getItem('tms_run_deliveries');
+        const savedVehicles = localStorage.getItem('tms_run_vehicles');
+        const savedTabs = localStorage.getItem('tms_run_custom_tabs');
+        const savedProducts = localStorage.getItem('tms_run_scanned_products');
+        
+        if (savedState) {
+            const parsed = JSON.parse(savedState);
+            Object.assign(currentState, parsed);
+            currentState.isScanning = false;
+            currentState.selectedDeliveryId = null;
+            currentState.deliveryActionState = null;
+        }
+        if (savedDeliveries) {
+            const parsed = JSON.parse(savedDeliveries);
+            deliveriesData.length = 0;
+            deliveriesData.push(...parsed);
+        }
+        if (savedVehicles) {
+            vehiclesData.length = 0;
+            vehiclesData.push(...JSON.parse(savedVehicles));
+        }
+        if (savedTabs) {
+            customTabsData.length = 0;
+            customTabsData.push(...JSON.parse(savedTabs));
+        }
+        if (savedProducts) {
+            scannedProductsData.length = 0;
+            scannedProductsData.push(...JSON.parse(savedProducts));
+        }
+    } catch (e) {
+        console.error('Falha ao carregar do localStorage:', e);
+    }
+}
+
+function renderOnlineBadge() {
+    if (isOnline) {
+        return `<span class="online-badge online" title="Você está conectado à internet"><span class="badge-dot"></span> Online</span>`;
+    } else {
+        return `<span class="online-badge offline" title="Modo offline ativo. Alterações serão salvas localmente"><span class="badge-dot"></span> Offline</span>`;
+    }
+}
+
+// Listeners de Conexão
+window.addEventListener('online', () => {
+    isOnline = true;
+    showToast('Conexão restabelecida! Você está online.');
+    render();
+});
+
+window.addEventListener('offline', () => {
+    isOnline = false;
+    showToast('Sem conexão de rede. O app continuará funcionando offline.');
+    render();
+});
+
+// Capturar evento de instalação PWA
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    render();
+});
+
+function triggerPWAInstall() {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then((choiceResult) => {
+        if (choiceResult.outcome === 'accepted') {
+            showToast('Obrigado por instalar o TMS RUN!');
+        }
+        deferredPrompt = null;
+        render();
+    });
+}
+
+function dismissPWAInstall() {
+    localStorage.setItem('pwa_prompt_dismissed', 'true');
+    const banner = document.getElementById('pwa-install-banner');
+    if (banner) {
+        banner.style.animation = 'slideOutBottom 0.3s forwards';
+        setTimeout(() => {
+            render();
+        }, 300);
+    }
+}
+
+function renderInstallBanner() {
+    if (!deferredPrompt || localStorage.getItem('pwa_prompt_dismissed') === 'true') return '';
+    return `
+        <div id="pwa-install-banner" class="pwa-install-banner">
+            <div class="pwa-banner-content">
+                <span class="pwa-banner-icon">📲</span>
+                <div>
+                    <h4 class="pwa-banner-title">Instalar TMS RUN</h4>
+                    <p class="pwa-banner-desc">Adicione à tela inicial para acesso rápido e modo offline.</p>
+                </div>
+            </div>
+            <div class="pwa-banner-actions">
+                <button class="btn-pwa-install" onclick="triggerPWAInstall()">Instalar</button>
+                <button class="btn-pwa-dismiss" onclick="dismissPWAInstall()">Depois</button>
+            </div>
+        </div>
+    `;
+}
+
 
 // --- Funções de Chat (Logística e Resposta Automática) ---
 function sendMessage() {
@@ -297,11 +433,11 @@ function progressBar(label, value, color) {
 const screens = {
     login: () => `
         <div class="login-page-container">
-            <header style="width: 100%; padding: 20px 60px; display: flex; justify-content: space-between; align-items: center; background: #01438B; border-bottom: none;">
+            <header class="login-header">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <img src="assets/logo_run.png" style="height: 60px; width: auto; object-fit: contain;" alt="RUN">
                 </div>
-                <nav style="display: flex; gap: 40px; font-weight: 600; font-size: 1.05rem; color: #FFB302;">
+                <nav class="login-nav">
                     <span style="cursor: pointer;" onclick="showToast('Em breve!')">Enviar pacotes</span>
                     <span style="cursor: pointer;" onclick="showToast('Em breve!')">Rastrear pacotes</span>
                     <span style="cursor: pointer;" onclick="showToast('Em breve!')">Fazer entregas</span>
@@ -309,11 +445,11 @@ const screens = {
                 </nav>
             </header>
             
-            <main style="display: flex; flex: 1; align-items: center; justify-content: center; background: #F8FAFC; padding: 40px;">
-                <div style="display: flex; width: 100%; max-width: 1200px; gap: 100px; align-items: center; justify-content: center;">
-                    <div style="flex: 1; max-width: 500px;">
-                        <h1 style="font-size: 4rem; font-weight: 800; line-height: 1.1; margin-bottom: 30px; color: #1E293B;">Vem com a RUN!</h1>
-                        <p style="font-size: 2rem; color: #475569; margin-bottom: 50px; line-height: 1.4;">Tecnologia que simplifica sua experiência de envios.</p>
+            <main class="login-main">
+                <div class="login-content-wrapper">
+                    <div class="login-hero">
+                        <h1>Vem com a RUN!</h1>
+                        <p>Tecnologia que simplifica sua experiência de envios.</p>
                     </div>
 
                     <div class="login-form-container">
@@ -321,7 +457,7 @@ const screens = {
                             <h2 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 25px; color: #1E293B;">Recuperar Senha</h2>
                             <p style="color: #64748B; margin-bottom: 15px;">Digite seu e-mail para receber as instruções.</p>
                             <div class="input-group" style="margin-bottom: 20px;">
-                                <input type="email" id="forgot-email" class="input-field" placeholder="Seu Email">
+                                <input type="email" id="forgot-email" class="input-field" placeholder="Seu Email" autocapitalize="none" autocorrect="off" spellcheck="false">
                             </div>
                             <button class="btn-entrar" onclick="handleForgotPassword()">Enviar Link</button>
                             <div style="text-align: center; margin-top: 20px;">
@@ -330,7 +466,7 @@ const screens = {
                         ` : `
                             <h2 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 25px; color: #1E293B;">Login</h2>
                             <div class="input-group" style="margin-bottom: 5px;">
-                                <input type="text" id="login-email" class="input-field" placeholder="Email ou Telefone">
+                                <input type="text" id="login-email" class="input-field" placeholder="Email ou Telefone" autocapitalize="none" autocorrect="off" spellcheck="false">
                             </div>
                             <div class="input-group" style="margin-bottom: 5px;">
                                 <input type="password" id="login-password" class="input-field" placeholder="Senha">
@@ -349,72 +485,110 @@ const screens = {
         const today = new Date().toLocaleDateString('pt-BR');
         const nowTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
         
+        // Se estiver escaneando (seja operador ou admin)
+        if (currentState.isScanning) {
+            const isAdminProduct = currentState.scannerContext === 'admin_product';
+            return `
+            <div class="app-layout">
+                ${sidebarTemplate()}
+                <div class="main-content" style="background: var(--background-light);">
+                    <header class="content-header" style="flex-direction: column; align-items: flex-start; padding: 25px 20px; background: var(--primary-blue); color: white; border-radius: 0 0 25px 25px; width: 100%; border: none;">
+                        <div style="display: flex; justify-content: space-between; width: 100%; margin-bottom: 5px;">
+                            <div style="font-weight: 700; font-size: 1.1rem; display: flex; align-items: center; gap: 10px;">
+                                📷 ${isAdminProduct ? 'Bipar Produto' : 'Scanner de Rota'}
+                            </div>
+                            <div style="font-weight: 600;">${nowTime}</div>
+                        </div>
+                        <div style="font-size: 0.9rem; opacity: 0.9;">🗓️ ${today}</div>
+                    </header>
+                    <div class="associar-rota-container" style="padding: 20px 10px;">
+                        <div class="associar-rota-card" style="gap: 15px; max-width: 550px; width: 100%; margin: 0 auto; box-shadow: var(--shadow-premium); border-radius: var(--radius-xl);">
+                            <h3 style="font-size: 1.5rem; font-weight: 800; color: var(--text-main); text-align: center;">
+                                ${isAdminProduct ? 'Bipar Produto' : 'Escanear Pacote'}
+                            </h3>
+                            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 5px; text-align: center;">
+                                ${isAdminProduct ? 'Aponte o leitor para o QR Code do pacote ou utilize a simulação de bipe abaixo.' : 'Aponte o leitor para o QR Code impresso na etiqueta do pacote.'}
+                            </p>
+                            
+                            <div class="scanner-viewport" style="margin-bottom: 15px;">
+                                <video id="scanner-video-feed" class="scanner-video" autoplay playsinline style="display: none;"></video>
+                                <div id="scanner-mock" class="scanner-mock-preview" style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);">
+                                    <span class="scanner-mock-qrcode" style="animation: pulse 2s infinite;">🔳</span>
+                                    <small style="color: rgba(255,255,255,0.7); font-weight: 600;">Leitor Ativo (Câmera Simulada)</small>
+                                </div>
+                                <div class="scanner-target-box"></div>
+                                <div class="scanner-corner tl"></div>
+                                <div class="scanner-corner tr"></div>
+                                <div class="scanner-corner bl"></div>
+                                <div class="scanner-corner br"></div>
+                                <div class="scanner-laser-line"></div>
+                            </div>
+                            
+                            ${isAdminProduct ? `
+                            <!-- Simulador de Bipe de Pacote específico (Exigido pelo Usuário) -->
+                            <div style="background: #F8FAFC; border: 1.5px solid #E2E8F0; border-radius: var(--radius-lg); padding: 18px; width: 100%; display: flex; flex-direction: column; gap: 12px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); margin-bottom: 5px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #E2E8F0; padding-bottom: 8px; margin-bottom: 4px;">
+                                    <span style="font-weight: 800; font-size: 0.85rem; color: var(--primary-blue); text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">📦 Pacote Detectado (Bipado)</span>
+                                    <span style="background: #D1FFED; color: #00875A; font-weight: 800; font-size: 0.75rem; padding: 2px 8px; border-radius: 20px;">Leitura OK</span>
+                                </div>
+                                
+                                <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.9rem;">
+                                    <div><strong>Número do Pacote:</strong> <span style="font-family: monospace; font-weight: 700; color: #1E293B; background: #E2E8F0; padding: 2px 6px; border-radius: 4px; font-size: 0.85rem;">6457897</span></div>
+                                    <div><strong>Destinatário:</strong> <span style="color: #475569; font-weight: 600;">Ana Maria Silva</span></div>
+                                    <div><strong>Endereço:</strong> <span style="color: #475569; font-size: 0.85rem;">Rua Augusta, 450 - Consolação, São Paulo - SP</span></div>
+                                </div>
+
+                                <div style="border-top: 1px solid #E2E8F0; padding-top: 12px; display: flex; flex-direction: column; gap: 6px;">
+                                    <label for="route-select" style="font-weight: 700; color: var(--text-main); font-size: 0.85rem; display: flex; align-items: center; gap: 4px;">🚚 Incluir em qual rota ?</label>
+                                    <select id="route-select" class="input-field" style="padding: 10px; border-radius: 8px; border: 1.5px solid #CBD5E1; font-weight: 600; background: white; cursor: pointer; color: #1E293B;">
+                                        <option value="SP">São Paulo (SP)</option>
+                                        <option value="RJ">Rio de Janeiro (RJ)</option>
+                                        <option value="GO">Goiás (GO)</option>
+                                    </select>
+                                </div>
+
+                                <button class="btn-entrar" style="background: var(--success); padding: 12px; font-weight: 700; font-size: 0.95rem; display: flex; justify-content: center; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2); margin-top: 5px;" onclick="confirmAdminBipe()">
+                                    ✅ Confirmar e Incluir na Rota
+                                </button>
+                            </div>
+                            ` : ''}
+                            
+                            <div style="display: flex; flex-direction: column; width: 100%; gap: 10px; margin-top: 5px;">
+                                ${!isAdminProduct ? `<button class="btn-entrar" style="background: var(--success); padding: 12px;" onclick="triggerScanSuccess()">⚡ Forçar Bipe de Sucesso</button>` : ''}
+                                <button class="btn-entrar" style="background: #64748B; padding: 12px;" onclick="cancelQRScanner()">Cancelar Leitura</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            `;
+        }
+
         if (currentState.userRole === 'operador') {
             if (!currentState.hasRoute) {
-                if (!currentState.isScanning) {
-                    return `
-                    <div class="app-layout">
-                        ${sidebarTemplate()}
-                        <div class="main-content" style="background: var(--background-light);">
-                            <header class="content-header" style="flex-direction: column; align-items: flex-start; padding: 25px 20px; background: var(--primary-blue); color: white; border-radius: 0 0 25px 25px; width: 100%; border: none;">
-                                <div style="display: flex; justify-content: space-between; width: 100%; margin-bottom: 5px;">
-                                    <div style="font-weight: 700; font-size: 1.1rem;">Sem Rota Ativa</div>
-                                    <div style="font-weight: 600;">${nowTime}</div>
-                                </div>
-                                <div style="font-size: 0.9rem; opacity: 0.9;">🗓️ ${today}</div>
-                            </header>
-                            <div class="associar-rota-container">
-                                <div class="associar-rota-card">
-                                    <div style="font-size: 4.5rem; margin-bottom: 10px;">📲</div>
-                                    <h2 style="font-size: 1.8rem; font-weight: 800; color: var(--text-main);">Associar Rota</h2>
-                                    <p style="color: var(--text-muted); line-height: 1.5; font-size: 0.95rem;">Escanear o QR Code de um pacote de entrega para vincular a rota correspondente ao seu perfil de motorista.</p>
-                                    <button class="btn-entrar" style="padding: 16px; font-size: 1.05rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-premium); background: var(--primary-blue); margin-top: 15px;" onclick="startQRScanner()">📷 Escanear QR Code</button>
-                                    <button class="btn-entrar" style="padding: 12px; font-size: 0.9rem; border-radius: var(--radius-lg); background: #F1F5F9; color: var(--text-main); border: 1.5px dashed #CBD5E1; box-shadow: none;" onclick="simulateQuickScan()">Simular Associação Direta</button>
-                                </div>
+                return `
+                <div class="app-layout">
+                    ${sidebarTemplate()}
+                    <div class="main-content" style="background: var(--background-light);">
+                        <header class="content-header" style="flex-direction: column; align-items: flex-start; padding: 25px 20px; background: var(--primary-blue); color: white; border-radius: 0 0 25px 25px; width: 100%; border: none;">
+                            <div style="display: flex; justify-content: space-between; width: 100%; margin-bottom: 5px;">
+                                <div style="font-weight: 700; font-size: 1.1rem;">Sem Rota Ativa</div>
+                                <div style="font-weight: 600;">${nowTime}</div>
+                            </div>
+                            <div style="font-size: 0.9rem; opacity: 0.9;">🗓️ ${today}</div>
+                        </header>
+                        <div class="associar-rota-container">
+                            <div class="associar-rota-card">
+                                <div style="font-size: 4.5rem; margin-bottom: 10px;">📲</div>
+                                <h2 style="font-size: 1.8rem; font-weight: 800; color: var(--text-main);">Associar Rota</h2>
+                                <p style="color: var(--text-muted); line-height: 1.5; font-size: 0.95rem;">Escanear o QR Code de um pacote de entrega para vincular a rota correspondente ao seu perfil de motorista.</p>
+                                <button class="btn-entrar" style="padding: 16px; font-size: 1.05rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-premium); background: var(--primary-blue); margin-top: 15px;" onclick="startQRScanner()">📷 Escanear QR Code</button>
+                                <button class="btn-entrar" style="padding: 12px; font-size: 0.9rem; border-radius: var(--radius-lg); background: #F1F5F9; color: var(--text-main); border: 1.5px dashed #CBD5E1; box-shadow: none;" onclick="simulateQuickScan()">Simular Associação Direta</button>
                             </div>
                         </div>
                     </div>
-                    `;
-                } else {
-                    return `
-                    <div class="app-layout">
-                        ${sidebarTemplate()}
-                        <div class="main-content" style="background: var(--background-light);">
-                            <header class="content-header" style="flex-direction: column; align-items: flex-start; padding: 25px 20px; background: var(--primary-blue); color: white; border-radius: 0 0 25px 25px; width: 100%; border: none;">
-                                <div style="display: flex; justify-content: space-between; width: 100%; margin-bottom: 5px;">
-                                    <div style="font-weight: 700; font-size: 1.1rem;">Scanner de Rota</div>
-                                    <div style="font-weight: 600;">${nowTime}</div>
-                                </div>
-                            </header>
-                            <div class="associar-rota-container">
-                                <div class="associar-rota-card" style="gap: 15px;">
-                                    <h3 style="font-size: 1.4rem; font-weight: 700; color: var(--text-main);">Escanear Pacote</h3>
-                                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 5px;">Aponte o leitor para o QR Code impresso na etiqueta do pacote.</p>
-                                    
-                                    <div class="scanner-viewport">
-                                        <video id="scanner-video-feed" class="scanner-video" autoplay playsinline style="display: none;"></video>
-                                        <div id="scanner-mock" class="scanner-mock-preview">
-                                            <span class="scanner-mock-qrcode">🔳</span>
-                                            <small style="color: rgba(255,255,255,0.7); font-weight: 600;">Ativando câmera...</small>
-                                        </div>
-                                        <div class="scanner-target-box"></div>
-                                        <div class="scanner-corner tl"></div>
-                                        <div class="scanner-corner tr"></div>
-                                        <div class="scanner-corner bl"></div>
-                                        <div class="scanner-corner br"></div>
-                                        <div class="scanner-laser-line"></div>
-                                    </div>
-                                    
-                                    <div style="display: flex; flex-direction: column; width: 100%; gap: 10px; margin-top: 10px;">
-                                        <button class="btn-entrar" style="background: var(--success); padding: 12px;" onclick="triggerScanSuccess()">⚡ Forçar Bipe de Sucesso</button>
-                                        <button class="btn-entrar" style="background: #64748B; padding: 12px;" onclick="cancelQRScanner()">Cancelar Leitura</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    `;
-                }
+                </div>
+                `;
             }
 
             const total = deliveriesData.length;
@@ -476,28 +650,6 @@ const screens = {
         }
 
         // --- Admin / Gestão View ---
-        if (!currentState.hasRoute) {
-            return `
-            <div class="app-layout">
-                ${sidebarTemplate()}
-                <div class="main-content">
-                    <header class="content-header">
-                        <div style="font-weight: 700; color: var(--primary-blue); font-size: 1.1rem;">Bem vindo, Felipe</div>
-                        <div style="color: #64748B;">${today}</div>
-                    </header>
-                    <div style="padding: 40px; display: flex; align-items: center; justify-content: center; height: calc(100vh - 100px);">
-                        <div style="text-align: center; background: white; padding: 50px; border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); max-width: 500px;">
-                            <div style="font-size: 4rem; margin-bottom: 20px;">🛣️</div>
-                            <h2 style="font-size: 1.8rem; margin-bottom: 10px; color: var(--text-main);">Você não possui rotas atribuídas</h2>
-                            <p style="color: var(--text-muted); margin-bottom: 20px;">No momento não há pacotes ou rotas para você. Aguarde a central ou fale com o suporte.</p>
-                            <button class="btn-entrar" style="width: auto; padding: 10px 30px;" onclick="navigate('messages')">Falar com Suporte</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            `;
-        }
-
         const total = deliveriesData.length;
         const done = deliveriesData.filter(d => d.status === 'done').length;
         const problems = deliveriesData.filter(d => d.status === 'problems').length;
@@ -514,7 +666,7 @@ const screens = {
                         <span>🗓️ ${today}</span>
                     </div>
                 </header>
-                <div style="padding: 40px;">
+                <div style="padding: 40px; overflow-y: auto;">
                     <h1 style="font-size: 2.2rem; font-weight: 800; margin-bottom: 30px;">Painel de Desempenho</h1>
                     
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 40px;">
@@ -540,12 +692,75 @@ const screens = {
                         </div>
                     </div>
 
-                    <div style="background: white; padding: 30px; border-radius: var(--radius-xl); box-shadow: var(--shadow-sm);">
-                        <h2 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 20px;">Progresso da Rota</h2>
-                        <div class="delivery-bars">
-                            ${progressBar('Completado', done, 'var(--success)')}
-                            ${progressBar('Em rota', todo, 'var(--primary-blue)')}
-                            ${progressBar('Problemas', problems, 'var(--error)')}
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 30px;">
+                        <div style="background: white; padding: 30px; border-radius: var(--radius-xl); box-shadow: var(--shadow-sm);">
+                            <h2 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 20px;">Progresso da Rota</h2>
+                            <div class="delivery-bars">
+                                ${progressBar('Completado', done, 'var(--success)')}
+                                ${progressBar('Em rota', todo, 'var(--primary-blue)')}
+                                ${progressBar('Problemas', problems, 'var(--error)')}
+                            </div>
+                        </div>
+
+                        <!-- Seção de Leitor de Códigos de Produto -->
+                        <div style="background: white; padding: 30px; border-radius: var(--radius-xl); box-shadow: var(--shadow-sm);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; flex-wrap: wrap; gap: 15px;">
+                                <div>
+                                    <h2 style="font-size: 1.5rem; font-weight: 700; color: var(--text-main);">📸 Bipar Produto</h2>
+                                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 5px;">Gerencie o bipamento de pacotes para o motorista e faça a alocação instantânea em rotas.</p>
+                                </div>
+                                <button class="btn-entrar" style="width: auto; padding: 12px 24px; display: flex; align-items: center; gap: 8px; font-weight: 700;" onclick="startAdminProductScanner()">
+                                    📷 Bipar Produto
+                                </button>
+                            </div>
+                            
+                            <div style="overflow-x: auto;">
+                                <table class="scanned-products-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+                                    <thead>
+                                        <tr style="border-bottom: 2px solid #E2E8F0; color: #475569; font-weight: 700; font-size: 0.9rem;">
+                                            <th style="padding: 12px 15px;">Nº Pacote</th>
+                                            <th style="padding: 12px 15px;">Destinatário e Endereço</th>
+                                            <th style="padding: 12px 15px;">Rota</th>
+                                            <th style="padding: 12px 15px;">Data/Hora</th>
+                                            <th style="padding: 12px 15px;">Status</th>
+                                            <th style="padding: 12px 15px; text-align: center;">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${scannedProductsData.length === 0 ? `
+                                            <tr>
+                                                <td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted); font-weight: 500;">
+                                                    Nenhum pacote bipado nesta sessão. Clique em "Bipar Produto" para iniciar.
+                                                </td>
+                                            </tr>
+                                        ` : scannedProductsData.map(p => `
+                                            <tr style="border-bottom: 1px solid #E2E8F0; font-size: 0.95rem;">
+                                                <td style="padding: 15px; font-weight: 700; color: var(--primary-blue); font-family: monospace; font-size: 1.05rem;">🏷️ ${p.code}</td>
+                                                <td style="padding: 15px;">
+                                                    <div style="font-weight: 700; color: var(--text-main);">${p.name || 'Produto Geral'}</div>
+                                                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 3px;">📍 ${p.address || 'Sem endereço especificado'}</div>
+                                                </td>
+                                                <td style="padding: 15px;">
+                                                    <span class="badge blue" style="font-size: 0.8rem; font-weight: 700; padding: 4px 10px; border-radius: 12px; background: #E0F2FE; color: #0369A1; border: none;">
+                                                        📌 Rota ${p.route || 'N/A'}
+                                                    </span>
+                                                </td>
+                                                <td style="padding: 15px; color: #475569; white-space: nowrap;">🕒 ${p.timestamp}</td>
+                                                <td style="padding: 15px;">
+                                                    <span class="badge green" style="font-size: 0.75rem; font-weight: 800; padding: 4px 10px; border-radius: 20px; background: #D1FFED; color: #00875A;">
+                                                        ${p.status}
+                                                    </span>
+                                                </td>
+                                                <td style="padding: 15px; text-align: center;">
+                                                    <button onclick="removerProdutoEscaneado('${p.id}')" style="background: none; border: none; color: var(--error); font-weight: 700; cursor: pointer; padding: 5px 10px; border-radius: 5px; transition: background 0.2s;" onmouseover="this.style.background='#FEF2F2'" onmouseout="this.style.background='none'">
+                                                        🗑️ Excluir
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -797,6 +1012,7 @@ const screens = {
                 <div class="tabs-container" style="margin: 20px 40px;">
                     <button class="tab ${currentState.activeSettingsTab === 'access' ? 'active' : ''}" onclick="setSettingsTab('access')">Gestão de Acessos</button>
                     <button class="tab ${currentState.activeSettingsTab === 'tabs' ? 'active' : ''}" onclick="setSettingsTab('tabs')">Gerenciar Abas</button>
+                    <button class="tab ${currentState.activeSettingsTab === 'pwa' ? 'active' : ''}" onclick="setSettingsTab('pwa')">Aplicativo PWA</button>
                 </div>
 
                 <div style="padding: 0 40px 40px;">
@@ -852,7 +1068,7 @@ const screens = {
                                 </tbody>
                             </table>
                         </div>
-                    ` : `
+                    ` : currentState.activeSettingsTab === 'tabs' ? `
                         <div style="background: white; padding: 30px; border-radius: 20px; box-shadow: var(--shadow-sm); text-align: center;">
                             <div style="font-size: 3rem; margin-bottom: 20px;">📂</div>
                             <h2>Adicionar Novas Abas</h2>
@@ -860,6 +1076,22 @@ const screens = {
                             <div style="max-width: 400px; margin: 0 auto; display: flex; gap: 10px;">
                                 <input type="text" id="new-tab-input" class="input-field" placeholder="Nome da nova aba...">
                                 <button class="btn-entrar" style="width: auto; white-space: nowrap; padding: 0 20px;" onclick="adicionarAba()">Adicionar</button>
+                            </div>
+                        </div>
+                    ` : `
+                        <div style="background: white; padding: 30px; border-radius: 20px; box-shadow: var(--shadow-sm); text-align: center; max-width: 600px; margin: 0 auto;">
+                            <div style="font-size: 4rem; margin-bottom: 20px;">📲</div>
+                            <h2>Versão do Aplicativo (PWA)</h2>
+                            <p style="color: #666; margin-bottom: 25px; line-height: 1.5;">O TMS RUN pode ser instalado diretamente no seu celular ou computador sem precisar usar a Google Play Store ou App Store. Isso permite acesso instantâneo e funcionamento offline.</p>
+                            
+                            <div style="margin: 20px 0; padding: 20px; border-radius: 15px; background: #F8FAFC; display: flex; flex-direction: column; align-items: center; gap: 10px; border: 1px solid #E2E8F0;">
+                                <span style="font-weight: 700; color: #475569;">Status do Dispositivo:</span>
+                                <span id="pwa-status-text" style="padding: 6px 16px; border-radius: 20px; font-size: 0.85rem; font-weight: 800; background: #EFF6FF; color: var(--primary-blue);">Verificando...</span>
+                            </div>
+                            
+                            <div style="margin-top: 30px;">
+                                <button id="btn-settings-install" class="btn-entrar" style="max-width: 300px; margin: 0 auto; display: none;" onclick="triggerPWAInstall()">Instalar Aplicativo</button>
+                                <p id="pwa-installed-msg" style="color: var(--success); font-weight: 700; display: none; font-size: 1.1rem;">✓ O aplicativo já está instalado e pronto para uso offline!</p>
                             </div>
                         </div>
                     `}
@@ -880,7 +1112,7 @@ const screens = {
                 <div class="input-group" style="margin-bottom: 20px;">
                     <label style="color: var(--text-main); font-weight: 500; margin-bottom: 8px; font-size: 0.95rem;">Email</label>
                     <div style="position: relative;">
-                         <input type="email" id="forgot-email" class="input-field" placeholder="Enter your Email" style="padding-left: 20px;">
+                         <input type="email" id="forgot-email" class="input-field" placeholder="Enter your Email" style="padding-left: 20px;" autocapitalize="none" autocorrect="off" spellcheck="false">
                     </div>
                 </div>
                 <button class="btn-entrar" onclick="handleForgotPassword()" style="background: var(--primary-blue); box-shadow: 0 5px 15px rgba(0, 80, 160, 0.3);">Redefinir Senha</button>
@@ -892,7 +1124,7 @@ const screens = {
 };
 
 function handleLogin() {
-    const email = document.getElementById('login-email').value.trim();
+    const email = document.getElementById('login-email').value.trim().toLowerCase();
     const pass = document.getElementById('login-password').value;
     const btn = document.querySelector('.btn-entrar[onclick="handleLogin()"]');
 
@@ -954,6 +1186,8 @@ function updateDeliveryStatus(id, status) {
 }
 
 function render() {
+    saveStateToLocalStorage();
+
     // If the active screen is a custom tab
     if (currentState.screen.startsWith('custom_')) {
         const tabIndex = parseInt(currentState.screen.replace('custom_', ''));
@@ -988,7 +1222,87 @@ function render() {
             listContainer.innerHTML = filtered.length > 0 ? filtered.map(renderDeliveryCard).join('') : '<div style="text-align:center; padding: 60px; opacity: 0.5;"><h3>Nenhuma entrega encontrada nesta aba</h3></div>';
         }
     }
+
+    // Injetar o banner de instalação se o prompt de PWA estiver ativo
+    const installBannerHtml = renderInstallBanner();
+    if (installBannerHtml) {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = installBannerHtml;
+        app.appendChild(tempDiv.firstElementChild);
+    }
+
+    // Injetar o badge de status de conexão em todos os headers presentes na tela
+    const headers = document.querySelectorAll('.content-header');
+    headers.forEach(header => {
+        if (header.querySelector('.online-badge')) return;
+        
+        const badgeContainer = document.createElement('div');
+        badgeContainer.innerHTML = renderOnlineBadge();
+        const badgeEl = badgeContainer.firstElementChild;
+        
+        // Se for o header do motorista ativo (que possui style flexDirection "column" ou classes associadas)
+        if (header.style.flexDirection === 'column' || header.closest('.driver-home-active-layout')) {
+            const flexRow = header.querySelector('div[style*="display: flex"]');
+            if (flexRow) {
+                const titleContainer = flexRow.querySelector('div[style*="font-weight: 800"]');
+                if (titleContainer) {
+                    titleContainer.appendChild(badgeEl);
+                } else {
+                    flexRow.appendChild(badgeEl);
+                }
+            } else {
+                header.appendChild(badgeEl);
+            }
+        } else {
+            // Headers padrão: insere após o primeiro título H1 ou Div
+            const titleElement = header.querySelector('h1') || header.querySelector('div');
+            if (titleElement) {
+                titleElement.style.display = 'flex';
+                titleElement.style.alignItems = 'center';
+                titleElement.style.gap = '10px';
+                titleElement.appendChild(badgeEl);
+            } else {
+                header.appendChild(badgeEl);
+            }
+        }
+    });
+
+    // Atualizar status do PWA na tela de configurações
+    if (currentState.screen === 'settings' && currentState.activeSettingsTab === 'pwa') {
+        setTimeout(() => {
+            const statusText = document.getElementById('pwa-status-text');
+            const btnInstall = document.getElementById('btn-settings-install');
+            const installedMsg = document.getElementById('pwa-installed-msg');
+            
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+            
+            if (statusText) {
+                if (isStandalone) {
+                    statusText.textContent = 'Executando como Aplicativo (Instalado)';
+                    statusText.style.background = '#D1FFED';
+                    statusText.style.color = '#00875A';
+                    if (installedMsg) installedMsg.style.display = 'block';
+                    if (btnInstall) btnInstall.style.display = 'none';
+                } else if (deferredPrompt) {
+                    statusText.textContent = 'Pronto para Instalação';
+                    statusText.style.background = '#EFF6FF';
+                    statusText.style.color = 'var(--primary-blue)';
+                    if (installedMsg) installedMsg.style.display = 'none';
+                    if (btnInstall) btnInstall.style.display = 'block';
+                } else {
+                    statusText.textContent = 'Acessado via Navegador';
+                    statusText.style.background = '#FFE8D1';
+                    statusText.style.color = '#D47A00';
+                    if (installedMsg) installedMsg.style.display = 'none';
+                    if (btnInstall) btnInstall.style.display = 'none';
+                }
+            }
+        }, 20);
+    }
 }
+
+// Carregar estado salvo antes do render inicial
+loadStateFromLocalStorage();
 
 // Initial render
 render();
@@ -1250,6 +1564,9 @@ function playBeepSound() {
 }
 
 function startQRScanner() {
+    if (currentState.scannerContext !== 'admin_product') {
+        currentState.scannerContext = 'driver_route';
+    }
     currentState.isScanning = true;
     render();
     
@@ -1288,6 +1605,11 @@ function startQRScanner() {
         });
 }
 
+function startAdminProductScanner() {
+    currentState.scannerContext = 'admin_product';
+    startQRScanner();
+}
+
 function cancelQRScanner() {
     if (streamRef) {
         streamRef.getTracks().forEach(track => track.stop());
@@ -1301,16 +1623,72 @@ function simulateQuickScan() {
     triggerScanSuccess();
 }
 
-function triggerScanSuccess() {
+function triggerScanSuccess(scannedCode = null) {
     playBeepSound();
     if (streamRef) {
         streamRef.getTracks().forEach(track => track.stop());
         streamRef = null;
     }
-    currentState.hasRoute = true;
     currentState.isScanning = false;
-    showToast("Pacote bipado! Rota Zona Sul associada com sucesso.");
+    
+    if (currentState.scannerContext === 'admin_product') {
+        let code = scannedCode;
+        if (!code) {
+            const userInput = prompt("Digite o código do produto (ou cancele para gerar automático):");
+            code = (userInput && userInput.trim()) ? userInput.trim().toUpperCase() : `RUN-PRD-${Math.floor(1000 + Math.random() * 9000)}`;
+        }
+        
+        const newProduct = {
+            id: 'PRD-' + Date.now(),
+            code: code,
+            timestamp: new Date().toLocaleString('pt-BR'),
+            status: 'Recebido'
+        };
+        scannedProductsData.unshift(newProduct);
+        showToast(`Produto ${code} escaneado!`);
+    } else {
+        currentState.hasRoute = true;
+        showToast("Pacote bipado! Rota Zona Sul associada com sucesso.");
+    }
+    
     navigate('home');
+}
+
+function confirmAdminBipe() {
+    const routeSelect = document.getElementById('route-select');
+    const route = routeSelect ? routeSelect.value : 'SP';
+    
+    playBeepSound();
+    
+    if (streamRef) {
+        streamRef.getTracks().forEach(track => track.stop());
+        streamRef = null;
+    }
+    currentState.isScanning = false;
+    
+    const newProduct = {
+        id: 'PRD-' + Date.now(),
+        code: '6457897',
+        name: 'Ana Maria Silva',
+        address: 'Rua Augusta, 450 - Consolação, São Paulo - SP',
+        route: route,
+        timestamp: new Date().toLocaleString('pt-BR'),
+        status: 'Roteirizado'
+    };
+    
+    scannedProductsData.unshift(newProduct);
+    saveStateToLocalStorage();
+    showToast(`Pacote 6457897 incluído na Rota ${route}!`);
+    navigate('home');
+}
+
+function removerProdutoEscaneado(id) {
+    if (confirm("Deseja realmente remover este produto da lista de recebidos?")) {
+        scannedProductsData = scannedProductsData.filter(p => p.id !== id);
+        saveStateToLocalStorage();
+        render();
+        showToast("Produto removido.");
+    }
 }
 
 function initDriverMap() {

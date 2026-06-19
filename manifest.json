@@ -1,0 +1,22 @@
+{
+  "name": "TMS RUN - Entregas",
+  "short_name": "TMS RUN",
+  "description": "TMS RUN – Plataforma de gestão de transportes e entregas da RUN.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#01438B",
+  "theme_color": "#0A58CA",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "assets/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}
