@@ -1,0 +1,10 @@
+# Dependencias e ambiente
+.env
+node_modules/
+
+# Arquivos temporarios e intermediarios
+.tmp/
+
+# Credenciais
+credentials.json
+token.json

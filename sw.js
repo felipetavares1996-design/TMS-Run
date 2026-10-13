@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tms-run-v3';
+const CACHE_NAME = 'tms-run-v15';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -18,12 +18,11 @@ const ASSETS_TO_CACHE = [
 
 // Instalação do Service Worker e cache preventivo dos arquivos estáticos
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       console.log('[Service Worker] Caching app shell...');
       return cache.addAll(ASSETS_TO_CACHE);
-    }).then(() => {
-      return self.skipWaiting();
     })
   );
 });
@@ -50,21 +49,17 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const requestUrl = new URL(event.request.url);
 
-  // Estratégia especial para Tiles do Mapa (CartoCDN) ou imagens dinâmicas
-  if (requestUrl.hostname.includes('basemaps.cartocdn.com') || requestUrl.pathname.endsWith('.png') || requestUrl.pathname.endsWith('.jpg')) {
+  // Estratégia especial para Tiles do Mapa (CartoCDN) ou imagens externas
+  if (requestUrl.hostname.includes('basemaps.cartocdn.com') || requestUrl.hostname.includes('unpkg.com') || requestUrl.hostname.includes('fonts.googleapis.com') || requestUrl.hostname.includes('fonts.gstatic.com')) {
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) => {
         return cache.match(event.request).then((cachedResponse) => {
-          // Tentar buscar na rede primeiro, atualizar o cache, se falhar, retorna do cache
           const fetchPromise = fetch(event.request).then((networkResponse) => {
             if (networkResponse && networkResponse.status === 200) {
               cache.put(event.request, networkResponse.clone());
             }
             return networkResponse;
-          }).catch(() => {
-            // Em caso de offline, retorna o tile ou imagem do cache se disponível
-            return cachedResponse;
-          });
+          }).catch(() => cachedResponse);
           return cachedResponse || fetchPromise;
         });
       })
@@ -72,23 +67,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Estratégia Cache-First para arquivos locais estáticos do PWA
+  // Estratégia Network-First para arquivos locais da aplicação (main.js, style.css, HTML)
+  // Garante que qualquer alteração no código seja aplicada imediatamente
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
+    fetch(event.request).then((networkResponse) => {
+      if (networkResponse && networkResponse.status === 200) {
+        const responseToCache = networkResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, responseToCache);
+        });
       }
-      return fetch(event.request).then((networkResponse) => {
-        // Se a requisição for válida, cachear para uso futuro
-        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-        }
-        return networkResponse;
-      }).catch(() => {
-        // Fallback offline caso não haja internet e nem cache
+      return networkResponse;
+    }).catch(() => {
+      // Se estiver offline ou sem rede, usa o cache local
+      return caches.match(event.request).then((cachedResponse) => {
+        if (cachedResponse) return cachedResponse;
         if (event.request.mode === 'navigate') {
           return caches.match('./index.html');
         }
